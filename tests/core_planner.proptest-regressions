@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 8db34594b3121e90bd03e3d1c49a0ad816cfcac876bef80d538caf817c411e9b # shrinks to state = SupervisorState { config: Config { github: GithubConfig { owner: "test", repo: "test", allowlist: ["aaa"] }, supervisor: SupervisorConfig { max_parallelism: 1, poll_interval_secs: 30, base_branch: "main" }, polytoken: PolytokenConfig { binary: "polytoken", max_tool_turns: 200 }, workspace: WorkspaceConfig { prefix: "grindbot", workspaces_dir: ".grindbot-workspaces" } }, issues: [], implementers: [ImplementerState { issue_number: 1, session_id: "00000aaa", workspace_name: "grindbot-0", workspace_path: "/tmp/grindbot-0", base_commit: "000000a0", started_at: 2024-01-02T00:00:00Z, status: Running }, ImplementerState { issue_number: 1, session_id: "000000aa", workspace_name: "grindbot-0", workspace_path: "/tmp/grindbot-0", base_commit: "a00000a0", started_at: 2024-01-02T00:00:00Z, status: Running }], workspaces: [], main_head: "00a00a0a", completed_issues: [] }

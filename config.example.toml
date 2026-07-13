@@ -1,0 +1,20 @@
+# Grindbot configuration file
+# Place this at grindbot.toml in the repo root or pass --config <path>
+
+[github]
+owner = "your-org"
+repo = "your-repo"
+allowlist = ["alice", "bob"]
+
+[supervisor]
+max_parallelism = 2        # Number of concurrent implementer agents
+poll_interval_secs = 30    # Seconds between poll cycles
+base_branch = "main"       # Branch to merge into
+
+[polytoken]
+binary = "polytoken"       # Path to polytoken binary
+max_tool_turns = 200        # Max tool turns per implementer session
+
+[workspace]
+prefix = "grindbot"         # Workspace name prefix
+workspaces_dir = ".grindbot-workspaces"  # Directory for workspaces (gitignored)
