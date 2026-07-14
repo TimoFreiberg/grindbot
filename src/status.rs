@@ -27,6 +27,7 @@ fn build_io_layer(config: &Config) -> IoLayer {
             &config.polytoken.binary,
         )),
         fs: Arc::new(crate::io::filesystem::RealFilesystem::new()),
+        command: Arc::new(crate::io::RealCommandRunner),
     }
 }
 
@@ -127,10 +128,16 @@ mod tests {
         fn write(&self, _path: &str, _content: &str) -> anyhow::Result<()> {
             Ok(())
         }
+        fn try_create_exclusive(&self, _path: &str, _content: &str) -> anyhow::Result<bool> {
+            Ok(true)
+        }
         fn exists(&self, _path: &str) -> bool {
             false
         }
         fn remove_dir_all(&self, _path: &str) -> anyhow::Result<()> {
+            Ok(())
+        }
+        fn remove_file(&self, _path: &str) -> anyhow::Result<()> {
             Ok(())
         }
         fn create_dir_all(&self, _path: &str) -> anyhow::Result<()> {
@@ -158,6 +165,9 @@ mod tests {
     struct MockJj;
     #[async_trait::async_trait]
     impl JjClient for MockJj {
+        async fn fetch(&self) -> anyhow::Result<()> {
+            Ok(())
+        }
         async fn init_colocated(&self, _repo_path: &str) -> anyhow::Result<()> {
             Ok(())
         }
@@ -246,6 +256,7 @@ mod tests {
             jj: Arc::new(MockJj),
             polytoken: Arc::new(MockPtAlive),
             fs: Arc::new(MockFs),
+            command: Arc::new(crate::io::RealCommandRunner),
         };
 
         let mut state_file = StateFile::default();
@@ -298,6 +309,7 @@ mod tests {
             jj: Arc::new(MockJj),
             polytoken: Arc::new(MockPtAlive),
             fs: Arc::new(MockFs),
+            command: Arc::new(crate::io::RealCommandRunner),
         };
         let state_file = StateFile::default();
 

@@ -24,6 +24,8 @@ allowlist = ["alice", "bob"]
 max_parallelism = 2
 poll_interval_secs = 30
 base_branch = "main"
+merge_lock_timeout_secs = 1800
+final_check_command = "cargo test"
 
 [polytoken]
 binary = "polytoken"
@@ -51,6 +53,8 @@ Issues are listed/fetched via `gh`; eligible only when the author is allowlisted
 | `max_parallelism` | integer | `2` | Max concurrent implementer sessions. |
 | `poll_interval_secs` | integer | `30` | Delay between poll cycles. |
 | `base_branch` | string | `"main"` | Jujutsu bookmark used as the merge target. |
+| `merge_lock_timeout_secs` | integer | `1800` | Age threshold used when recovering an inactive stale `.grindbot/merge.lock`. |
+| `final_check_command` | string | absent | Optional command run in the implementation workspace before pushing main. |
 
 ### `[polytoken]`
 
@@ -78,7 +82,8 @@ Issues are listed/fetched via `gh`; eligible only when the author is allowlisted
 Per managed workspace:
 
 - `.grindbot/base_commit` — revision the implementer must produce a commit ahead of.
-- `.grindbot/result.json` — `done` or `needs-feedback` handoff result.
+- `.grindbot/result.json` — versioned approved manifest evidence or `needs-feedback` result.
+- `.grindbot/merge.lock` — atomically acquired supervisor merge ownership metadata; released after handled merge paths.
 - `.grindbot/stop_counter` — failed stop-hook attempts (reset on handoff).
 - `.polytoken/hooks.json` — stop hook (gated for implementers; always-stop for conflict resolvers).
 - `.polytoken/permissions.yaml` — deny rules (`rm -r*`, `git push`, `jj git`, `jj abandon`; filesystem write-denied under `.grindbot/` and `.polytoken/`).

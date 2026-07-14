@@ -5,8 +5,8 @@ use std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use grindbot::core::state::Issue;
 use grindbot::io::{
-    CommitInfo, Filesystem, GithubClient, JjClient, PolytokenClient, RebaseResult, SessionInfo,
-    SessionState,
+    CommandOutput, CommandRunner, CommitInfo, Filesystem, GithubClient, JjClient, PolytokenClient,
+    RebaseResult, SessionInfo, SessionState,
 };
 
 // --- Mock Filesystem ---
@@ -41,6 +41,13 @@ impl Filesystem for MockFilesystem {
         Ok(())
     }
 
+    fn try_create_exclusive(&self, path: &str, content: &str) -> anyhow::Result<bool> {
+        let mut files = self.files.lock().unwrap();
+        if files.contains_key(path) { return Ok(false); }
+        files.insert(path.to_string(), content.to_string());
+        Ok(true)
+    }
+
     fn exists(&self, path: &str) -> bool {
         self.files.lock().unwrap().contains_key(path)
     }
@@ -49,8 +56,29 @@ impl Filesystem for MockFilesystem {
         Ok(())
     }
 
+    fn remove_file(&self, path: &str) -> anyhow::Result<()> {
+        self.files.lock().unwrap().remove(path);
+        Ok(())
+    }
+
     fn create_dir_all(&self, _path: &str) -> anyhow::Result<()> {
         Ok(())
+    }
+}
+
+pub struct MockCommandRunner {
+    pub output: Arc<Mutex<CommandOutput>>,
+}
+
+impl MockCommandRunner {
+    pub fn new(status: i32) -> Self {
+        Self { output: Arc::new(Mutex::new(CommandOutput { status, stdout: String::new(), stderr: String::new() })) }
+    }
+}
+
+impl CommandRunner for MockCommandRunner {
+    fn run(&self, _command: &str, _cwd: &str) -> anyhow::Result<CommandOutput> {
+        Ok(self.output.lock().unwrap().clone())
     }
 }
 
@@ -127,6 +155,8 @@ impl MockJjClient {
 
 #[async_trait]
 impl JjClient for MockJjClient {
+    async fn fetch(&self) -> anyhow::Result<()> { Ok(()) }
+
     async fn init_colocated(&self, _repo_path: &str) -> anyhow::Result<()> {
         Ok(())
     }

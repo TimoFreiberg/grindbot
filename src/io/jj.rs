@@ -23,6 +23,12 @@ impl RealJjClient {
 
 #[async_trait::async_trait]
 impl JjClient for RealJjClient {
+    async fn fetch(&self) -> anyhow::Result<()> {
+        let output = self.run_jj(&["git", "fetch"]).await?;
+        if !output.status.success() { anyhow::bail!("jj git fetch failed: {}", String::from_utf8_lossy(&output.stderr)); }
+        Ok(())
+    }
+
     async fn init_colocated(&self, repo_path: &str) -> anyhow::Result<()> {
         let output = tokio::process::Command::new("jj")
             .args(["git", "init", repo_path])

@@ -34,7 +34,44 @@ fn write_result(workspace_root: &Path, result: &HandoffResult) -> anyhow::Result
     Ok(())
 }
 
-/// Handle `grindbot handoff done --commit <hash>`.
+/// Handle `grindbot handoff done --manifest <path>`.
+pub fn done_manifest(manifest_path: &Path) -> anyhow::Result<()> {
+    let workspace_root = find_workspace_root()?;
+    let manifest: HandoffResult = serde_json::from_str(&std::fs::read_to_string(manifest_path)?)?;
+    let HandoffResult::Done { commit, timestamp, issue, summary, evidence, .. } = manifest else {
+        anyhow::bail!("approved handoff manifest must have status=done");
+    };
+    let evidence = evidence.ok_or_else(|| anyhow::anyhow!("approved handoff is missing evidence"))?;
+    if evidence.plan_review.trim().is_empty()
+        || evidence.implementation_review.trim().is_empty()
+        || evidence.tests.is_empty()
+        || evidence.acceptance_mapping.is_empty()
+        || evidence.unresolved_findings
+    {
+        anyhow::bail!("approved handoff evidence is incomplete or has unresolved findings");
+    }
+    validate_commit(&workspace_root, &commit)?;
+    write_result(&workspace_root, &HandoffResult::Done {
+        manifest_version: 1, commit: commit.clone(), timestamp, issue, summary,
+        evidence: Some(evidence),
+    })?;
+    println!("Handoff complete: done (commit: {})", commit);
+    Ok(())
+}
+
+fn validate_commit(workspace_root: &Path, commit: &str) -> anyhow::Result<()> {
+    let base_commit = std::fs::read_to_string(workspace_root.join(".grindbot/base_commit"))?.trim().to_string();
+    let output = std::process::Command::new("jj").args(["log", "-r", commit, "--no-graph", "-R", workspace_root.to_str().unwrap()]).output()?;
+    if !output.status.success() { anyhow::bail!("commit {} does not exist: {}", commit, String::from_utf8_lossy(&output.stderr)); }
+    let revset = format!("{}::{} ~ {}", base_commit, commit, base_commit);
+    let output = std::process::Command::new("jj").args(["log", "-r", &revset, "--no-graph", "-R", workspace_root.to_str().unwrap()]).output()?;
+    if !output.status.success() || String::from_utf8_lossy(&output.stdout).trim().is_empty() {
+        anyhow::bail!("commit {} is not ahead of base {}", commit, base_commit);
+    }
+    Ok(())
+}
+
+/// Legacy direct commit path retained for reading old callers.
 pub fn done(commit: &str) -> anyhow::Result<()> {
     let workspace_root = find_workspace_root()?;
 
@@ -106,8 +143,12 @@ pub fn done(commit: &str) -> anyhow::Result<()> {
 
     let timestamp = chrono::Utc::now().to_rfc3339();
     let result = HandoffResult::Done {
+        manifest_version: 1,
         commit: commit.to_string(),
         timestamp,
+        issue: None,
+        summary: String::new(),
+        evidence: None,
     };
 
     write_result(&workspace_root, &result)?;

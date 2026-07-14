@@ -3,6 +3,7 @@ pub mod core;
 pub mod doctor;
 pub mod handoff;
 pub mod io;
+pub mod merge_lock;
 pub mod prompt;
 pub mod state_file;
 pub mod status;

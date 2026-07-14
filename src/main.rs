@@ -49,7 +49,7 @@ enum HandoffAction {
     /// Signal that implementation is complete
     Done {
         #[arg(long)]
-        commit: String,
+        manifest: PathBuf,
     },
     /// Request more information from the issue author
     NeedsFeedback {
@@ -111,8 +111,8 @@ async fn main() -> anyhow::Result<()> {
         }
         Command::Handoff { action } => {
             match action {
-                HandoffAction::Done { commit } => {
-                    grindbot::handoff::done(&commit)?;
+                HandoffAction::Done { manifest } => {
+                    grindbot::handoff::done_manifest(&manifest)?;
                 }
                 HandoffAction::NeedsFeedback {
                     message,

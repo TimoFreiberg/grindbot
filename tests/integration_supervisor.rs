@@ -7,6 +7,7 @@
 mod common;
 
 use grindbot::config::Config;
+use grindbot::merge_lock::MergeLock;
 use grindbot::io::{Filesystem, GithubClient, JjClient, PolytokenClient, RebaseResult};
 use grindbot::state_file::{ActiveImplementer, StateFile};
 use grindbot::workspace;
@@ -24,6 +25,8 @@ fn make_config() -> Config {
             max_parallelism: 2,
             poll_interval_secs: 1,
             base_branch: "main".to_string(),
+            merge_lock_timeout_secs: 1800,
+            final_check_command: None,
         },
         ..Config::default()
     }
@@ -93,6 +96,7 @@ async fn test_merge_flow_success() {
         jj: jj.clone(),
         polytoken: std::sync::Arc::new(polytoken),
         fs: std::sync::Arc::new(fs),
+        command: std::sync::Arc::new(common::MockCommandRunner::new(0)),
     };
     let mut state = StateFile::default();
     state.add_implementer(ActiveImplementer {
@@ -102,6 +106,9 @@ async fn test_merge_flow_success() {
         workspace_path: "/tmp/grindbot-42".into(),
         base_commit: "basecommit456".into(),
         started_at: "2024-01-01T00:00:00Z".into(),
+        port: 0,
+        bearer_token: String::new(),
+        credential_file: String::new(),
     });
     grindbot::supervisor::merge_implementation(
         &config,
@@ -127,6 +134,15 @@ async fn test_merge_flow_success() {
             .iter()
             .any(|task| task.issue_number == 42 && task.commit == "newcommit123")
     );
+}
+
+#[test]
+fn test_merge_lock_atomic_acquisition_and_release() {
+    let fs = std::sync::Arc::new(MockFilesystem::new());
+    let first = MergeLock::acquire(fs.clone(), "/tmp/repo", 1, "ws-1", "s-1", "owner").unwrap();
+    assert!(MergeLock::acquire(fs.clone(), "/tmp/repo", 2, "ws-2", "s-2", "owner").is_err());
+    drop(first);
+    assert!(MergeLock::acquire(fs, "/tmp/repo", 2, "ws-2", "s-2", "owner").is_ok());
 }
 
 // AC.12: Merge flow with conflict

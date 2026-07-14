@@ -26,6 +26,17 @@ pub fn plan(state: &SupervisorState) -> Vec<Action> {
 
     // 2. Process finished sessions
     for imp in &state.implementers {
+        if let ImplementerStatus::Malformed { error } = &imp.status {
+            handled_issues.insert(imp.issue_number);
+            actions.push(Action::PostComment {
+                issue_number: imp.issue_number,
+                body: format!("<!-- grindbot -->\\n\\n**Invalid handoff:**\\n\\n{}", error),
+            });
+            actions.push(Action::CleanupWorkspace {
+                workspace_name: imp.workspace_name.clone(),
+                reason: CleanupReason::MalformedHandoff,
+            });
+        }
         if let ImplementerStatus::Finished(result) = &imp.status {
             handled_issues.insert(imp.issue_number);
             match result {
@@ -176,6 +187,8 @@ mod tests {
                 max_parallelism,
                 poll_interval_secs: 30,
                 base_branch: "main".to_string(),
+                merge_lock_timeout_secs: 1800,
+                final_check_command: None,
             },
             ..Config::default()
         }

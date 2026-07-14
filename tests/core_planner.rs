@@ -71,6 +71,8 @@ fn config_generator(tc: TestCase) -> Config {
             max_parallelism: tc.draw(gs::integers::<usize>().min_value(1).max_value(4)),
             poll_interval_secs: 30,
             base_branch: "main".into(),
+            merge_lock_timeout_secs: 1800,
+            final_check_command: None,
         },
         ..Config::default()
     }
@@ -190,6 +192,25 @@ fn prop_crashed_sessions_are_cleaned_exactly_once(tc: TestCase) {
             .count(),
         1
     );
+}
+
+#[test]
+fn malformed_handoff_is_diagnostic_cleanup_only() {
+    let config = Config::default();
+    let state = SupervisorState {
+        config,
+        issues: vec![],
+        implementers: vec![ImplementerState {
+            issue_number: 42, session_id: "s".into(), workspace_name: "ws".into(),
+            workspace_path: "/tmp/ws".into(), base_commit: "base".into(),
+            started_at: chrono::Utc::now(), status: ImplementerStatus::Malformed { error: "bad json".into() },
+        }],
+        workspaces: vec![], main_head: "main".into(), completed_issues: vec![],
+    };
+    let actions = grindbot::core::planner::plan(&state);
+    assert!(!actions.iter().any(|a| matches!(a, grindbot::core::actions::Action::MergeImplementation { .. })));
+    assert!(actions.iter().any(|a| matches!(a, grindbot::core::actions::Action::PostComment { issue_number: 42, .. })));
+    assert!(actions.iter().any(|a| matches!(a, grindbot::core::actions::Action::CleanupWorkspace { workspace_name, .. } if workspace_name == "ws")));
 }
 
 #[hegel::test]

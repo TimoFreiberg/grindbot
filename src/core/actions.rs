@@ -43,5 +43,6 @@ pub enum Action {
 pub enum CleanupReason {
     SessionCrashed,
     SessionFinished,
+    MalformedHandoff,
     OrphanedWorkspace,
 }

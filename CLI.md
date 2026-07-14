@@ -22,7 +22,7 @@ grindbot [global flags] <subcommand> [options]
 grindbot supervise   [--config <PATH>|-c <PATH>] [--dry-run]
 grindbot status      [--config <PATH>|-c <PATH>]
 grindbot doctor      [--config <PATH>|-c <PATH>]
-grindbot handoff done             --commit <HASH>
+grindbot handoff done             --manifest <PATH>
 grindbot handoff needs-feedback   --message <TEXT> | --message-file <PATH>
 ```
 
@@ -66,12 +66,12 @@ The `--config` option is **optional** and behaves differently from `supervise`/`
 Called by an implementer agent after committing an implementation.
 
 ```bash
-grindbot handoff done --commit <commit_hash>
+grindbot handoff done --manifest <manifest.json>
 ```
 
 | Option | Short | Required | Default |
 |---|---|---|---|
-| `--commit` | | Yes | — |
+| `--manifest` | | Yes | — |
 
 Walks up to the nearest `.jj` ancestor, reads `.grindbot/base_commit`, verifies the revision exists and is strictly ahead of the base, then writes `.grindbot/result.json` and resets `.grindbot/stop_counter` (`src/handoff.rs::done`). Missing base, unknown revision, or a non-ahead commit fails without writing a result.
 

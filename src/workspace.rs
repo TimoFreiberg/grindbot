@@ -159,11 +159,23 @@ mod tests {
             Ok(())
         }
 
+        fn try_create_exclusive(&self, path: &str, content: &str) -> anyhow::Result<bool> {
+            let mut files = self.files.lock().unwrap();
+            if files.contains_key(path) { return Ok(false); }
+            files.insert(path.to_string(), content.to_string());
+            Ok(true)
+        }
+
         fn exists(&self, path: &str) -> bool {
             self.files.lock().unwrap().contains_key(path)
         }
 
         fn remove_dir_all(&self, _path: &str) -> anyhow::Result<()> {
+            Ok(())
+        }
+
+        fn remove_file(&self, path: &str) -> anyhow::Result<()> {
+            self.files.lock().unwrap().remove(path);
             Ok(())
         }
 

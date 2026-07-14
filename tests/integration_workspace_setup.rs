@@ -80,6 +80,7 @@ fn test_stop_hook_script_content() {
     // Verify the stop hook script has the expected logic
     assert!(STOP_HOOK_SCRIPT.contains("POLYTOKEN_PROJECT_DIR"));
     assert!(STOP_HOOK_SCRIPT.contains("result.json"));
+    assert!(STOP_HOOK_SCRIPT.contains("handoff done --manifest <path>"));
     assert!(STOP_HOOK_SCRIPT.contains("stop_counter"));
     assert!(STOP_HOOK_SCRIPT.contains(r#""outcome":"stop""#));
     assert!(STOP_HOOK_SCRIPT.contains(r#""outcome":"continue""#));

@@ -42,32 +42,37 @@ Issue URL: {url}
 You are running in an autonomous supervised session. Your work will be reviewed
 by reviewer subagents before it is accepted.
 
-### 1. Plan
+### 1. Investigate and plan
 
-You are starting in plan mode. Investigate the codebase and write a plan for
-implementing this issue. Your plan must pass review by the plan-reviewer
-subagent. Fix or rebut all findings until the reviewer accepts the plan. When
-the plan passes review, it will automatically hand off to the execute facet.
+Investigate the issue and relevant codebase. Write a concrete implementation
+plan. Run the existing `plan-reviewer` workflow, fixing or rebutting findings
+until the plan-reviewer accepts the plan.
 
-### 2. Implement
+### 2. Implement and test
 
-Implement the plan. Your implementation must pass review by a reviewer
-subagent. Fix or rebut all findings until the reviewer accepts the
-implementation. Commit your work using jj (the repo uses Jujutsu).
+Implement the accepted plan and add/update tests. Run the project checks. Then
+run the repository's existing implementation-review workflow, fixing or
+rebutting findings until the implementation reviewer accepts the result. The
+existing reviewer skills/facets define review behavior; do not invent a new
+review protocol.
 
-### 3. Finish
+### 3. Finish with structured evidence
 
-When your implementation is complete and has passed review, signal completion
-by running:
+Record an acceptance-criteria-to-test mapping and a test inventory/results in a
+workspace-local JSON manifest (outside `.grindbot/`). Only after both review
+stages accept, signal completion by running:
 
-    {grindbot_path} handoff done --commit <commit_hash>
+    {grindbot_path} handoff done --manifest <path>
 
-Use `jj log` to find the hash of your latest commit. The commit must contain
-actual changes (not be identical to the base).
+The manifest must contain the approved outcome, commit, accepted plan-review
+and implementation-review evidence, tests, mapping, unresolved-findings status,
+summary, and timestamp. No operator approval is required for a clean,
+fully-reviewed handoff; operator attention is for feedback requests or failures.
+The commit must contain actual changes and be ahead of the recorded base.
 
 ### 4. Need Help?
 
-If you need more information from the issue author to proceed, run:
+`needs-feedback` is an intentional early exit. If you need more information from the issue author to proceed, run:
 
     {grindbot_path} handoff needs-feedback --message "<explanation>"
 

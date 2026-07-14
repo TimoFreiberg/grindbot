@@ -45,6 +45,7 @@ pub struct ImplementerState {
 pub enum ImplementerStatus {
     Running,
     Finished(ImplementerResult),
+    Malformed { error: String },
     Crashed,
 }
 
@@ -83,12 +84,49 @@ impl SupervisorState {
     }
 }
 
+/// Evidence recorded by an approved handoff. The supervisor checks these facts
+/// mechanically and trusts the existing reviewer agents for semantic quality.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct HandoffEvidence {
+    pub plan_review: String,
+    pub implementation_review: String,
+    pub tests: Vec<TestEvidence>,
+    pub acceptance_mapping: Vec<AcceptanceTestMapping>,
+    #[serde(default)]
+    pub unresolved_findings: bool,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TestEvidence {
+    pub name: String,
+    pub result: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct AcceptanceTestMapping {
+    pub acceptance_criterion: String,
+    pub verification: String,
+}
+
 /// Result file written by the handoff binary, read by the supervisor.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "status")]
 pub enum HandoffResult {
     #[serde(rename = "done")]
-    Done { commit: String, timestamp: String },
+    Done {
+        #[serde(default = "default_manifest_version")]
+        manifest_version: u32,
+        commit: String,
+        timestamp: String,
+        #[serde(default)]
+        issue: Option<u64>,
+        #[serde(default)]
+        summary: String,
+        #[serde(default)]
+        evidence: Option<HandoffEvidence>,
+    },
     #[serde(rename = "needs-feedback")]
     NeedsFeedback { message: String, timestamp: String },
 }
+
+fn default_manifest_version() -> u32 { 1 }

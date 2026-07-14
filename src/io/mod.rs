@@ -19,8 +19,36 @@ pub trait GithubClient: Send + Sync {
     ) -> anyhow::Result<()>;
 }
 
+#[derive(Clone, Debug)]
+pub struct CommandOutput {
+    pub status: i32,
+    pub stdout: String,
+    pub stderr: String,
+}
+
+pub trait CommandRunner: Send + Sync {
+    fn run(&self, command: &str, cwd: &str) -> anyhow::Result<CommandOutput>;
+}
+
+pub struct RealCommandRunner;
+
+impl CommandRunner for RealCommandRunner {
+    fn run(&self, command: &str, cwd: &str) -> anyhow::Result<CommandOutput> {
+        let output = std::process::Command::new("sh")
+            .args(["-c", command])
+            .current_dir(cwd)
+            .output()?;
+        Ok(CommandOutput {
+            status: output.status.code().unwrap_or(-1),
+            stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
+            stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+        })
+    }
+}
+
 #[async_trait::async_trait]
 pub trait JjClient: Send + Sync {
+    async fn fetch(&self) -> anyhow::Result<()>;
     async fn init_colocated(&self, repo_path: &str) -> anyhow::Result<()>;
     async fn create_workspace(&self, dest: &str, name: &str, base_rev: &str) -> anyhow::Result<()>;
     async fn forget_workspace(&self, name: &str) -> anyhow::Result<()>;
@@ -81,8 +109,10 @@ pub struct SessionState {
 pub trait Filesystem: Send + Sync {
     fn read_to_string(&self, path: &str) -> anyhow::Result<String>;
     fn write(&self, path: &str, content: &str) -> anyhow::Result<()>;
+    fn try_create_exclusive(&self, path: &str, content: &str) -> anyhow::Result<bool>;
     fn exists(&self, path: &str) -> bool;
     fn remove_dir_all(&self, path: &str) -> anyhow::Result<()>;
+    fn remove_file(&self, path: &str) -> anyhow::Result<()>;
     fn create_dir_all(&self, path: &str) -> anyhow::Result<()>;
 }
 
@@ -92,4 +122,5 @@ pub struct IoLayer {
     pub jj: Arc<dyn JjClient>,
     pub polytoken: Arc<dyn PolytokenClient>,
     pub fs: Arc<dyn Filesystem>,
+    pub command: Arc<dyn CommandRunner>,
 }

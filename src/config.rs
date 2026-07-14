@@ -23,6 +23,10 @@ pub struct SupervisorConfig {
     pub poll_interval_secs: u64,
     #[serde(default = "default_base_branch")]
     pub base_branch: String,
+    #[serde(default = "default_merge_lock_timeout_secs")]
+    pub merge_lock_timeout_secs: u64,
+    #[serde(default)]
+    pub final_check_command: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -50,6 +54,9 @@ fn default_poll_interval() -> u64 {
 fn default_base_branch() -> String {
     "main".to_string()
 }
+fn default_merge_lock_timeout_secs() -> u64 {
+    1800
+}
 fn default_polytoken_binary() -> String {
     "polytoken".to_string()
 }
@@ -75,6 +82,8 @@ impl Default for Config {
                 max_parallelism: default_parallelism(),
                 poll_interval_secs: default_poll_interval(),
                 base_branch: default_base_branch(),
+                merge_lock_timeout_secs: default_merge_lock_timeout_secs(),
+                final_check_command: None,
             },
             polytoken: PolytokenConfig {
                 binary: default_polytoken_binary(),
@@ -143,6 +152,8 @@ mod tests {
                 max_parallelism: 2,
                 poll_interval_secs: 30,
                 base_branch: "main".to_string(),
+                merge_lock_timeout_secs: 1800,
+                final_check_command: None,
             },
             polytoken: PolytokenConfig {
                 binary: "polytoken".to_string(),
