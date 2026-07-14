@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use crate::core::state::HandoffResult;
+use crate::core::state::{HandoffEvidence, HandoffResult};
 
 /// Find the workspace root by walking up from CWD until `.jj/` is found.
 fn find_workspace_root() -> anyhow::Result<PathBuf> {
@@ -34,45 +34,79 @@ fn write_result(workspace_root: &Path, result: &HandoffResult) -> anyhow::Result
     Ok(())
 }
 
-/// Handle `grindbot handoff done --manifest <path>`.
-pub fn done_manifest(manifest_path: &Path) -> anyhow::Result<()> {
+/// Handle `grindbot handoff done` with structured evidence supplied as CLI arguments.
+pub fn done(
+    commit: &str,
+    plan_review: &str,
+    implementation_review: &str,
+    tests: &[String],
+    acceptance_mapping: &[String],
+    summary: &str,
+    issue: Option<u64>,
+    unresolved_findings: bool,
+) -> anyhow::Result<()> {
     let workspace_root = find_workspace_root()?;
-    let manifest: HandoffResult = serde_json::from_str(&std::fs::read_to_string(manifest_path)?)?;
-    let HandoffResult::Done {
-        commit,
-        timestamp,
-        issue,
-        summary,
-        evidence,
-        ..
-    } = manifest
-    else {
-        anyhow::bail!("approved handoff manifest must have status=done");
+    let evidence = HandoffEvidence {
+        plan_review: plan_review.to_string(),
+        implementation_review: implementation_review.to_string(),
+        tests: tests
+            .iter()
+            .map(|value| parse_test(value))
+            .collect::<anyhow::Result<Vec<_>>>()?,
+        acceptance_mapping: acceptance_mapping
+            .iter()
+            .map(|value| parse_acceptance(value))
+            .collect::<anyhow::Result<Vec<_>>>()?,
+        unresolved_findings,
     };
-    let evidence =
-        evidence.ok_or_else(|| anyhow::anyhow!("approved handoff is missing evidence"))?;
     if evidence.plan_review.trim().is_empty()
         || evidence.implementation_review.trim().is_empty()
         || evidence.tests.is_empty()
         || evidence.acceptance_mapping.is_empty()
         || evidence.unresolved_findings
     {
-        anyhow::bail!("approved handoff evidence is incomplete or has unresolved findings");
+        anyhow::bail!("handoff evidence is incomplete or has unresolved findings");
     }
-    validate_commit(&workspace_root, &commit)?;
+    validate_commit(&workspace_root, commit)?;
     write_result(
         &workspace_root,
         &HandoffResult::Done {
             manifest_version: 1,
-            commit: commit.clone(),
-            timestamp,
+            commit: commit.to_string(),
+            timestamp: jiff::Timestamp::now().to_string(),
             issue,
-            summary,
+            summary: summary.to_string(),
             evidence: Some(evidence),
         },
     )?;
     println!("Handoff complete: done (commit: {})", commit);
     Ok(())
+}
+
+fn parse_test(value: &str) -> anyhow::Result<crate::core::state::TestEvidence> {
+    let (name, result) = value
+        .split_once('=')
+        .ok_or_else(|| anyhow::anyhow!("--test must use NAME=RESULT"))?;
+    if name.trim().is_empty() || result.trim().is_empty() {
+        anyhow::bail!("--test must have non-empty NAME and RESULT");
+    }
+    Ok(crate::core::state::TestEvidence {
+        name: name.trim().to_string(),
+        result: result.trim().to_string(),
+    })
+}
+
+fn parse_acceptance(value: &str) -> anyhow::Result<crate::core::state::AcceptanceTestMapping> {
+    let (acceptance_criterion, verification) = value
+        .split_once('=')
+        .ok_or_else(|| anyhow::anyhow!("--acceptance must use CRITERION=VERIFICATION"))?;
+    if acceptance_criterion.trim().is_empty() || verification.trim().is_empty() {
+        anyhow::bail!("--acceptance must have non-empty CRITERION and VERIFICATION");
+    }
+    Ok(crate::core::state::AcceptanceTestMapping {
+        acceptance_criterion: acceptance_criterion.trim().to_string(),
+        verification: verification.trim().to_string(),
+    })
 }
 
 fn validate_commit(workspace_root: &Path, commit: &str) -> anyhow::Result<()> {
@@ -116,7 +150,7 @@ fn validate_commit(workspace_root: &Path, commit: &str) -> anyhow::Result<()> {
 }
 
 /// Legacy direct commit path retained for reading old callers.
-pub fn done(commit: &str) -> anyhow::Result<()> {
+pub fn done_legacy(commit: &str) -> anyhow::Result<()> {
     let workspace_root = find_workspace_root()?;
 
     // Read base commit

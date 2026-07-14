@@ -61,7 +61,7 @@ if [ "$COUNT" -ge 3 ]; then
 fi
 
 # No result file and under the counter limit → force the model back to work.
-echo '{"outcome":"continue","reason":"You must call the handoff binary to end your session. Run: grindbot handoff done --manifest <path> OR grindbot handoff needs-feedback --message <text>"}'
+echo '{"outcome":"continue","reason":"You must call the handoff binary to end your session. Run: grindbot handoff done --help for the required reviewed completion arguments, or grindbot handoff needs-feedback --message <text>"}'
 exit 0
 "#;
 

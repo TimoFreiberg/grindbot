@@ -46,10 +46,59 @@ enum Command {
 
 #[derive(Subcommand)]
 enum HandoffAction {
-    /// Signal that implementation is complete
+    /// Signal that implementation is complete and reviewed
+    #[command(
+        after_help = "Examples:\n  grindbot handoff done --commit abc123 --plan-review 'accepted' --implementation-review 'accepted' --test 'cargo test=passed' --acceptance 'AC.1=verified' --summary 'Implemented the feature'\n\nRepeat --test and --acceptance for each entry. The command writes .grindbot/result.json; no manifest file is needed."
+    )]
     Done {
-        #[arg(long)]
-        manifest: PathBuf,
+        /// jj revision containing the implementation; must be ahead of .grindbot/base_commit
+        #[arg(
+            long,
+            value_name = "REVISION",
+            help = "jj revision containing the implementation; must be ahead of .grindbot/base_commit"
+        )]
+        commit: String,
+        /// Reviewer attestation for the accepted plan
+        #[arg(
+            long,
+            value_name = "TEXT",
+            help = "Reviewer attestation for the accepted plan"
+        )]
+        plan_review: String,
+        /// Reviewer attestation for the accepted implementation
+        #[arg(
+            long,
+            value_name = "TEXT",
+            help = "Reviewer attestation for the accepted implementation"
+        )]
+        implementation_review: String,
+        /// Test inventory entry, formatted as NAME=RESULT; repeat for each test
+        #[arg(long, value_name = "NAME=RESULT", action = clap::ArgAction::Append, required = true, help = "Test inventory entry formatted as NAME=RESULT; repeat for each test (at least one required)")]
+        test: Vec<String>,
+        /// Acceptance mapping entry, formatted as CRITERION=VERIFICATION; repeat for each criterion
+        #[arg(long, value_name = "CRITERION=VERIFICATION", action = clap::ArgAction::Append, required = true, help = "Acceptance mapping formatted as CRITERION=VERIFICATION; repeat for each criterion (at least one required)")]
+        acceptance: Vec<String>,
+        /// Short summary of the completed work
+        #[arg(
+            long,
+            value_name = "TEXT",
+            default_value = "",
+            help = "Short summary of the completed work"
+        )]
+        summary: String,
+        /// Issue number associated with the implementation
+        #[arg(
+            long,
+            value_name = "NUMBER",
+            help = "Issue number associated with the implementation"
+        )]
+        issue: Option<u64>,
+        /// Mark the handoff as having unresolved findings (this makes it fail)
+        #[arg(
+            long,
+            help = "Mark unresolved findings; successful handoffs reject this flag"
+        )]
+        unresolved_findings: bool,
     },
     /// Request more information from the issue author
     NeedsFeedback {
@@ -110,8 +159,26 @@ async fn main() -> anyhow::Result<()> {
             grindbot::doctor::run(cfg.as_ref()).await?;
         }
         Command::Handoff { action } => match action {
-            HandoffAction::Done { manifest } => {
-                grindbot::handoff::done_manifest(&manifest)?;
+            HandoffAction::Done {
+                commit,
+                plan_review,
+                implementation_review,
+                test,
+                acceptance,
+                summary,
+                issue,
+                unresolved_findings,
+            } => {
+                grindbot::handoff::done(
+                    &commit,
+                    &plan_review,
+                    &implementation_review,
+                    &test,
+                    &acceptance,
+                    &summary,
+                    issue,
+                    unresolved_findings,
+                )?;
             }
             HandoffAction::NeedsFeedback {
                 message,

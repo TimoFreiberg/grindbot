@@ -5,6 +5,12 @@ Autonomous issue implementation supervisor. Grindbot pulls issues from GitHub, s
 ## Installation
 
 ```sh
+cargo binstall grindbot
+```
+
+Or build from source:
+
+```sh
 cargo install --path .
 ```
 
@@ -39,8 +45,8 @@ workspaces_dir = ".grindbot-workspaces"
 # Run the supervisor daemon
 grindbot supervise --config grindbot.toml
 
-# Signal completion (called by implementer agents inside workspaces)
-grindbot handoff done --commit <hash>
+# Signal reviewed completion (called by implementer agents inside workspaces)
+grindbot handoff done --commit <hash> --plan-review '<text>' --implementation-review '<text>' --test 'name=result' --acceptance 'criterion=verification'
 grindbot handoff needs-feedback --message "Need more info about X"
 ```
 
@@ -60,7 +66,7 @@ grindbot supervise --config grindbot.toml    # Run the supervisor daemon
 grindbot supervise --dry-run                 # Preview actions without executing
 grindbot status --config grindbot.toml       # Show current state
 grindbot doctor --config grindbot.toml       # Check dependencies
-grindbot handoff done --commit <hash>        # Signal completion
+grindbot handoff done --commit <hash> ...     # Signal reviewed completion
 grindbot handoff needs-feedback --message "..."  # Request feedback
 grindbot --version                           # Print version
 ```
@@ -110,3 +116,15 @@ When a rebase produces conflicts, the supervisor spawns a one-shot conflict reso
 - **`polytoken new failed`**: Verify the polytoken binary path in config, run `polytoken --version`.
 - **Sessions immediately marked crashed**: Ensure the supervisor can reach the Polytoken daemon's HTTP port (check firewall rules).
 - **State file not found**: The state file is at `~/.local/share/grindbot/{owner}/{repo}/state.json`. The directory is created automatically on first run.
+
+## Releasing
+
+Releases are tag-triggered. Pushing a `v*` tag builds binaries for macOS (arm64 + x86_64) and Linux (x86_64) and publishes a GitHub Release automatically.
+
+1. Bump `version` in `Cargo.toml`.
+2. Commit the change.
+3. Create and push a tag (e.g. `v0.1.0`).
+4. CI builds and publishes the release automatically.
+5. `cargo binstall grindbot` picks up the new version.
+
+The tag name must match the version (tag `v0.1.0` → version `0.1.0`).

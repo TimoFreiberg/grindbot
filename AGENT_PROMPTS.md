@@ -62,27 +62,36 @@ skills/facets define review behavior; do not invent a new review protocol.
 
 ### 3. Finish with structured evidence
 
-Record an acceptance-criteria-to-test mapping and a test inventory/results in a
-workspace-local JSON manifest (outside `.grindbot/`). Only after both review
-stages accept, signal completion by running:
+Record an acceptance-criteria-to-test mapping and a test inventory/results as
+CLI arguments. Only after both review stages accept, signal completion by running:
 
-    {grindbot_path} handoff done --manifest <path>
+    {grindbot_path} handoff done --commit <rev> \\
+      --plan-review '<accepted plan review>' \\
+      --implementation-review '<accepted implementation review>' \\
+      --test 'test name=result' \\
+      --acceptance 'criterion=verification' \\
+      --summary '<short summary>'
 
-The manifest must contain the approved outcome, commit, accepted plan-review
-and implementation-review evidence, tests, mapping, unresolved-findings status,
-summary, and timestamp. No operator approval is required for a clean,
-fully-reviewed handoff; operator attention is for feedback requests or failures.
+Repeat `--test` and `--acceptance` once per entry. These text values are your
+self-reported review/test/acceptance evidence and audit notes; the supervisor
+records them but does not independently verify them. The command writes the
+result file itself; no workspace manifest file is needed. No operator approval
+is required for a clean, fully-reviewed handoff; operator attention is for
+feedback requests or failures.
 The commit must contain actual changes and be ahead of the recorded base.
 
 ### 4. Need Help?
 
-`needs-feedback` is an intentional early exit. If you need more information from the issue author to proceed, run:
+`needs-feedback` is an intentional early exit. Its message is sent to the human
+operator/issue author verbatim and posted as the feedback request. If you need
+more information to proceed, run:
 
     {grindbot_path} handoff needs-feedback --message "<explanation>"
 
 Do not write any code if you are requesting feedback. Explain clearly what
-information you need and why, providing enough context for the issue author to
-make a decision without reading the codebase.
+information you need and why, providing enough context for the human operator
+to make a decision without reading the codebase. Do not include private scratch
+notes or instructions intended only for yourself in this message.
 
 ### Important
 

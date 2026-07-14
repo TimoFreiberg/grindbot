@@ -80,7 +80,7 @@ Eligible issues are sorted FIFO (oldest first) by creation date.
 
 **Agent session:** the stop hook gates session end. Stop is allowed when `.grindbot/result.json` exists; otherwise the hook forces `continue`. After 3 consecutive stop attempts with no result file, stop is allowed (the session is classified as a crash).
 
-**Handoff:** `grindbot handoff done --manifest <path>` validates the versioned manifest evidence, commit existence, and commit-ahead-of-base fact, then writes `result.json` and resets the stop counter. `grindbot handoff needs-feedback --message <text>` (or `--message-file <path>`) writes the intentional early-exit result directly. The handoff binary walks up to the nearest `.jj` directory — the workspace root, not the main repo.
+**Handoff:** `grindbot handoff done` validates CLI-supplied review evidence, commit existence, and the commit-ahead-of-base fact, then writes `result.json` and resets the stop counter. `grindbot handoff needs-feedback --message <text>` (or `--message-file <path>`) writes the intentional early-exit result directly. The handoff binary walks up to the nearest `.jj` directory — the workspace root, not the main repo.
 
 **Completion:** a `done` result triggers rebase onto `main@origin` → set bookmark → push → comment → record completed → reset conflict retries → cleanup workspace. A `needs-feedback` result posts the message, records it, and cleans up. Dead/crashed/malformed sessions are cleaned up via `CleanupWorkspace`.
 

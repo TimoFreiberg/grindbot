@@ -22,7 +22,7 @@ grindbot [global flags] <subcommand> [options]
 grindbot supervise   [--config <PATH>|-c <PATH>] [--dry-run]
 grindbot status      [--config <PATH>|-c <PATH>]
 grindbot doctor      [--config <PATH>|-c <PATH>]
-grindbot handoff done             --manifest <PATH>
+grindbot handoff done             --commit <REVISION> [evidence args]
 grindbot handoff needs-feedback   --message <TEXT> | --message-file <PATH>
 ```
 
@@ -66,14 +66,27 @@ The `--config` option is **optional** and behaves differently from `supervise`/`
 Called by an implementer agent after committing an implementation.
 
 ```bash
-grindbot handoff done --manifest <manifest.json>
+grindbot handoff done \\
+  --commit REVISION_ID \\
+  --plan-review 'accepted after planning review' \\
+  --implementation-review 'accepted after implementation review' \\
+  --test 'cargo test=passed' \\
+  --acceptance 'AC.1=verified by integration test' \\
+  --summary 'Short description of completed work'
 ```
 
-| Option | Short | Required | Default |
+| Option | Required | Repeatable | Notes |
 |---|---|---|---|
-| `--manifest` | | Yes | — |
+| `--commit` | Yes | No | jj revision, strictly ahead of base |
+| `--plan-review` | Yes | No | Non-empty attestation |
+| `--implementation-review` | Yes | No | Non-empty attestation |
+| `--test NAME=RESULT` | Yes | Yes | At least one required |
+| `--acceptance CRITERION=VERIFICATION` | Yes | Yes | At least one required |
+| `--summary` | No | No | Defaults to empty |
+| `--issue` | No | No | Issue number |
+| `--unresolved-findings` | No | No | Must not be supplied for a successful handoff |
 
-Walks up to the nearest `.jj` ancestor, reads `.grindbot/base_commit`, verifies the revision exists and is strictly ahead of the base, then writes `.grindbot/result.json` and resets `.grindbot/stop_counter` (`src/handoff.rs::done`). Missing base, unknown revision, or a non-ahead commit fails without writing a result.
+Walks up to the nearest `.jj` ancestor, validates the evidence arguments and that the revision exists and is strictly ahead of `.grindbot/base_commit`, then writes `.grindbot/result.json` and resets `.grindbot/stop_counter` (`src/handoff.rs::done`). No input manifest file is required.
 
 ## `grindbot handoff needs-feedback`
 
@@ -89,7 +102,7 @@ grindbot handoff needs-feedback --message-file path/to/message.txt
 | `--message` | | One of the two | — |
 | `--message-file` | | One of the two | — |
 
-Exactly one of `--message` or `--message-file` must be provided; they conflict with each other (`conflicts_with`). `--message-file` reads the message from a file (trimmed). Finds the `.jj` workspace, writes a needs-feedback result with UTC timestamp, and resets the stop counter (`src/handoff.rs::needs_feedback`). No commit/base validation.
+Exactly one of `--message` or `--message-file` must be provided; they conflict with each other (`conflicts_with`). The message is sent to the human operator/issue author verbatim and posted as the feedback request. `--message-file` reads the message from a file (trimmed). Finds the `.jj` workspace, writes a needs-feedback result with UTC timestamp, and resets the stop counter (`src/handoff.rs::needs_feedback`). No commit/base validation.
 
 ## Result protocol
 

@@ -85,23 +85,24 @@ fn test_handoff_done_writes_result_file() {
     std::fs::create_dir_all(&grindbot_dir).unwrap();
     std::fs::write(grindbot_dir.join("base_commit"), &base).unwrap();
 
-    std::fs::write(
-        dir.path().join("manifest.json"),
-        serde_json::json!({
-            "status": "done", "manifest_version": 1, "commit": commit,
-            "timestamp": "2024-01-01T00:00:00Z", "summary": "done",
-            "evidence": {"plan_review": "accepted", "implementation_review": "accepted",
-            "tests": [{"name": "cargo test", "result": "passed"}],
-            "acceptance_mapping": [{"acceptance_criterion": "AC", "verification": "test"}],
-            "unresolved_findings": false}
-        })
-        .to_string(),
-    )
-    .unwrap();
-
-    // Run handoff done
+    // Run handoff done without requiring the agent to create a manifest file.
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_grindbot"))
-        .args(["handoff", "done", "--manifest", "manifest.json"])
+        .args([
+            "handoff",
+            "done",
+            "--commit",
+            &commit,
+            "--plan-review",
+            "accepted",
+            "--implementation-review",
+            "accepted",
+            "--test",
+            "cargo test=passed",
+            "--acceptance",
+            "AC=test",
+            "--summary",
+            "done",
+        ])
         .current_dir(dir.path())
         .output()
         .unwrap();
@@ -140,23 +141,22 @@ fn test_handoff_done_invalid_commit_fails() {
     std::fs::create_dir_all(&grindbot_dir).unwrap();
     std::fs::write(grindbot_dir.join("base_commit"), &base).unwrap();
 
-    std::fs::write(
-        dir.path().join("manifest.json"),
-        serde_json::json!({
-            "status": "done", "manifest_version": 1, "commit": "nonexistent123456",
-            "timestamp": "2024-01-01T00:00:00Z", "evidence": {
-            "plan_review": "accepted", "implementation_review": "accepted",
-            "tests": [{"name": "test", "result": "passed"}],
-            "acceptance_mapping": [{"acceptance_criterion": "AC", "verification": "test"}],
-            "unresolved_findings": false}
-        })
-        .to_string(),
-    )
-    .unwrap();
-
-    // Run handoff done with a non-existent commit
+    // Run handoff done with a non-existent commit.
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_grindbot"))
-        .args(["handoff", "done", "--manifest", "manifest.json"])
+        .args([
+            "handoff",
+            "done",
+            "--commit",
+            "nonexistent123456",
+            "--plan-review",
+            "accepted",
+            "--implementation-review",
+            "accepted",
+            "--test",
+            "test=passed",
+            "--acceptance",
+            "AC=test",
+        ])
         .current_dir(dir.path())
         .output()
         .unwrap();
