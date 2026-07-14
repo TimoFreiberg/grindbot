@@ -60,6 +60,8 @@ pub async fn run(config: Config, dry_run: bool) -> anyhow::Result<()> {
         shutdown_clone.notify_one();
     });
 
+    let mut last_log = std::time::Instant::now();
+
     loop {
         // 1. Gather state
         let state = match gather_state(&config, &io, &mut state_file).await {
@@ -79,9 +81,14 @@ pub async fn run(config: Config, dry_run: bool) -> anyhow::Result<()> {
         // 2. Plan
         let actions = planner::plan(&state);
 
-        // 3. Log cycle summary
-        log_cycle_summary(&state, &actions);
-        log_implementer_progress(&state);
+        // 3. Log cycle summary (throttled) + stall warnings (always)
+        if last_log.elapsed() >= Duration::from_secs(config.supervisor.log_interval_secs) {
+            log_cycle_summary(&state, &actions);
+            log_implementer_progress(&state);
+            last_log = std::time::Instant::now();
+        } else {
+            log_stall_warnings(&state);
+        }
 
         // 4. Execute actions
         for action in actions {
@@ -1012,9 +1019,8 @@ fn is_stalled(stall_cycles: u32, threshold: u32) -> bool {
     stall_cycles >= threshold
 }
 
-/// Log per-implementer progress and emit stall warnings.
+/// Log per-implementer progress info lines.
 fn log_implementer_progress(state: &SupervisorState) {
-    let threshold = state.config.supervisor.stall_threshold_cycles;
     for imp in &state.implementers {
         if !matches!(imp.status, ImplementerStatus::Running) {
             continue;
@@ -1038,6 +1044,17 @@ fn log_implementer_progress(state: &SupervisorState) {
             imp.stall_cycles,
             snippet
         );
+    }
+}
+
+/// Emit stall warnings for any implementer that appears stuck.
+/// Called every cycle so stuck sessions are surfaced immediately.
+fn log_stall_warnings(state: &SupervisorState) {
+    let threshold = state.config.supervisor.stall_threshold_cycles;
+    for imp in &state.implementers {
+        if !matches!(imp.status, ImplementerStatus::Running) {
+            continue;
+        }
         if is_stalled(imp.stall_cycles, threshold) {
             tracing::warn!(
                 "implementer #{} ({}) appears stuck: no assistant text change for {} cycles",

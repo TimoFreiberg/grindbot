@@ -77,6 +77,7 @@ fn config_generator(tc: TestCase) -> Config {
             merge_lock_timeout_secs: 1800,
             final_check_command: None,
             stall_threshold_cycles: 5,
+            log_interval_secs: 300,
         },
         ..Config::default()
     }

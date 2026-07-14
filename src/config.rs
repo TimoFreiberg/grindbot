@@ -29,6 +29,10 @@ pub struct SupervisorConfig {
     pub final_check_command: Option<String>,
     #[serde(default = "default_stall_threshold_cycles")]
     pub stall_threshold_cycles: u32,
+    /// Minimum seconds between routine info-level cycle summaries.
+    /// Stall warnings and important events still log immediately.
+    #[serde(default = "default_log_interval_secs")]
+    pub log_interval_secs: u64,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -74,6 +78,9 @@ fn default_workspaces_dir() -> String {
 fn default_stall_threshold_cycles() -> u32 {
     5
 }
+fn default_log_interval_secs() -> u64 {
+    300
+}
 
 impl Default for Config {
     fn default() -> Self {
@@ -90,6 +97,7 @@ impl Default for Config {
                 merge_lock_timeout_secs: default_merge_lock_timeout_secs(),
                 final_check_command: None,
                 stall_threshold_cycles: default_stall_threshold_cycles(),
+                log_interval_secs: default_log_interval_secs(),
             },
             polytoken: PolytokenConfig {
                 binary: default_polytoken_binary(),
@@ -139,6 +147,9 @@ impl Config {
         if self.supervisor.stall_threshold_cycles == 0 {
             anyhow::bail!("[supervisor] stall_threshold_cycles must be at least 1");
         }
+        if self.supervisor.log_interval_secs == 0 {
+            anyhow::bail!("[supervisor] log_interval_secs must be at least 1");
+        }
         if self.workspace.prefix.is_empty() {
             anyhow::bail!("[workspace] prefix must not be empty");
         }
@@ -164,6 +175,7 @@ mod tests {
                 merge_lock_timeout_secs: 1800,
                 final_check_command: None,
                 stall_threshold_cycles: default_stall_threshold_cycles(),
+                log_interval_secs: default_log_interval_secs(),
             },
             polytoken: PolytokenConfig {
                 binary: "polytoken".to_string(),
@@ -251,5 +263,19 @@ mod tests {
         cfg.supervisor.stall_threshold_cycles = 0;
         let err = cfg.validate().unwrap_err().to_string();
         assert!(err.contains("stall_threshold_cycles"), "got: {err}");
+    }
+
+    #[test]
+    fn test_log_interval_default() {
+        let config = Config::default();
+        assert_eq!(config.supervisor.log_interval_secs, 300);
+    }
+
+    #[test]
+    fn test_log_interval_validation() {
+        let mut cfg = valid_config();
+        cfg.supervisor.log_interval_secs = 0;
+        let err = cfg.validate().unwrap_err().to_string();
+        assert!(err.contains("log_interval_secs"), "got: {err}");
     }
 }

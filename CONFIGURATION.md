@@ -28,6 +28,7 @@ base_branch = "main"
 merge_lock_timeout_secs = 1800
 final_check_command = "cargo test"
 stall_threshold_cycles = 5
+log_interval_secs = 300
 
 [polytoken]
 binary = "polytoken"
@@ -58,6 +59,7 @@ Issues are listed/fetched via `gh`; eligible only when the author is allowlisted
 | `merge_lock_timeout_secs` | integer | `1800` | Age threshold used when recovering an inactive stale `.grindbot/merge.lock`. |
 | `final_check_command` | string | absent | Optional command run in the implementation workspace before pushing main. |
 | `stall_threshold_cycles` | integer | `5` | Consecutive poll cycles with no token growth before a stuck warning is emitted. Effective wall-clock time depends on `poll_interval_secs`. |
+| `log_interval_secs` | integer | `300` | Minimum seconds between routine info-level cycle summaries and progress logs. Stall warnings still fire every cycle. |
 
 ### `[polytoken]`
 
@@ -104,6 +106,7 @@ Supervisor state at the `HOME`-derived path above. Missing/malformed/version-mis
 - `poll_interval_secs` must be >= 1.
 - `base_branch` must not be empty.
 - `stall_threshold_cycles` must be >= 1.
+- `log_interval_secs` must be >= 1.
 - `workspace.prefix` must not be empty.
 
 The supervisor does not merge or push from the implementer prompt; the base bookmark is managed by the supervisor's jj flow.
