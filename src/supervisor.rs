@@ -667,13 +667,13 @@ async fn resolve_conflict(
         .set_goal(&session_info, "Resolve merge conflicts in workspace")
         .await?;
 
-    let resolution_prompt = "Resolve the merge conflicts in this workspace. Use the jj-resolve-conflicts skill. Do not make any changes beyond what is needed to resolve the conflicts.";
+    let resolution_prompt = include_str!("prompts/conflict_resolution.md");
     io.polytoken
         .send_prompt(&session_info, resolution_prompt, 50)
         .await?;
 
     // Wait for the agent to finish (poll with timeout)
-    let timeout = std::time::Duration::from_secs(600); // 10 minutes
+    let timeout = std::time::Duration::from_secs(1800); // 30 minutes
     let start = std::time::Instant::now();
 
     loop {

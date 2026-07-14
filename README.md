@@ -78,6 +78,8 @@ grindbot --version                           # Print version
 └─────────────────────────────────────────────────────┘
 ```
 
+The planner — `core::plan(state) -> Vec<Action>` — is a **pure decision function**: it takes a state snapshot and returns actions to execute, performing no I/O. This keeps the decision logic fully deterministic and property-testable, with all side effects isolated to the I/O layer that executes the returned actions. For the full planner decision flow — including the action ordering, eligibility rules, and conflict-handling steps — see [`CORE_LOOP.md`](CORE_LOOP.md).
+
 ### Architecture: Pure Core + I/O Layer
 
 The codebase is split into a **pure decision core** (no I/O, fully property-testable) and an **I/O layer** (traits with real implementations and test mocks). The supervisor loop gathers state from I/O, feeds it to the core, and executes the returned actions.
@@ -92,7 +94,7 @@ The codebase is split into a **pure decision core** (no I/O, fully property-test
 
 ### Merge Conflict Resolution
 
-When a rebase produces conflicts, the supervisor spawns a one-shot conflict resolution agent with the `jj-resolve-conflicts` skill. If resolution fails after 3 attempts, the supervisor posts a comment explaining the persistent conflict.
+When a rebase produces conflicts, the supervisor spawns a one-shot conflict resolution agent with the `jj-resolve-conflicts` skill (50 max turns, bypass+ permissions, a 30-minute timeout). If resolution fails after 3 attempts, the supervisor posts a comment explaining the persistent conflict.
 
 ## Requirements
 

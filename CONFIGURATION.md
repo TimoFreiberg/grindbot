@@ -68,8 +68,8 @@ Issues are listed/fetched via `gh`; eligible only when the author is allowlisted
 
 ## Environment
 
-- `RUST_LOG` — tracing filter; defaults to `info` when unset.
-- `HOME` — state file path `$HOME/.local/share/grindbot/{owner}/{repo}/state.json`; falls back to `./.local/share/grindbot/{owner}/{repo}/state.json` when unset.
+- `RUST_LOG` — tracing filter; defaults to `info` when unset. Can be overridden by `--quiet`/`--verbose` CLI flags.
+- `HOME` — determines the state file path `$HOME/.local/share/grindbot/{owner}/{repo}/state.json`; falls back to `./.local/share/grindbot/{owner}/{repo}/state.json` when unset.
 - `POLYTOKEN_PROJECT_DIR` — consumed by the generated stop hook to locate workspace result/counter files (set by Polytoken from the session working directory).
 - CWD — repo context, default config location, and handoff workspace-root discovery (walks up to the nearest `.jj/`).
 
@@ -87,15 +87,14 @@ Supervisor state at the `HOME`-derived path above. Missing/malformed/version-mis
 
 ## Validation
 
-- Missing required `[github]` fields, invalid TOML, or unreadable files fail startup.
-- The supervisor does not merge or push from the implementer prompt; the base bookmark is managed by the supervisor's jj flow.
+`Config::validate()` enforces the following. Any failure aborts startup with a descriptive error.
 
-## Source references
+- `owner` must not be empty.
+- `repo` must not be empty.
+- `allowlist` must contain at least one username.
+- `max_parallelism` must be >= 1.
+- `poll_interval_secs` must be >= 1.
+- `base_branch` must not be empty.
+- `workspace.prefix` must not be empty.
 
-- `src/main.rs` — CLI, config loading
-- `src/config.rs` — schema, defaults
-- `src/state_file.rs` — persistent state path/load/save
-- `src/workspace.rs` — workspace file generation, `.gitignore`
-- `src/prompt.rs` — stop hook, permissions
-- `src/supervisor.rs` — turn limits, conflict resolution
-- `config.example.toml`
+The supervisor does not merge or push from the implementer prompt; the base bookmark is managed by the supervisor's jj flow.
