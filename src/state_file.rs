@@ -296,7 +296,10 @@ mod tests {
         let json = serde_json::to_string(&imp).unwrap();
         let restored: ActiveImplementer = serde_json::from_str(&json).unwrap();
         assert_eq!(restored.last_used_tokens, Some(42000));
-        assert_eq!(restored.last_assistant_text, Some("working on the thing".to_string()));
+        assert_eq!(
+            restored.last_assistant_text,
+            Some("working on the thing".to_string())
+        );
         assert_eq!(restored.stall_cycles, 3);
     }
 

@@ -178,7 +178,9 @@ pub async fn gather_state(
                             ImplementerStatus::Finished(ImplementerResult::Done { commit })
                         }
                         Ok(HandoffResult::NeedsFeedback { message, .. }) => {
-                            ImplementerStatus::Finished(ImplementerResult::NeedsFeedback { message })
+                            ImplementerStatus::Finished(ImplementerResult::NeedsFeedback {
+                                message,
+                            })
                         }
                         Err(error) => ImplementerStatus::Malformed {
                             error: error.to_string(),
@@ -209,18 +211,23 @@ pub async fn gather_state(
         let alive = state_result.is_ok();
 
         // Update stall tracking and extract progress data
-        let (used_tokens, limit_tokens, snippet, stall_cycles, turn_in_flight) = if let Ok(ref ss) = state_result {
-            update_stall_tracking(active, ss.used_tokens, ss.most_recent_assistant_text.as_deref());
-            (
-                ss.used_tokens,
-                ss.limit_tokens,
-                ss.most_recent_assistant_text.clone(),
-                active.stall_cycles,
-                ss.turn_in_flight,
-            )
-        } else {
-            (None, None, None, active.stall_cycles, false)
-        };
+        let (used_tokens, limit_tokens, snippet, stall_cycles, turn_in_flight) =
+            if let Ok(ref ss) = state_result {
+                update_stall_tracking(
+                    active,
+                    ss.used_tokens,
+                    ss.most_recent_assistant_text.as_deref(),
+                );
+                (
+                    ss.used_tokens,
+                    ss.limit_tokens,
+                    ss.most_recent_assistant_text.clone(),
+                    active.stall_cycles,
+                    ss.turn_in_flight,
+                )
+            } else {
+                (None, None, None, active.stall_cycles, false)
+            };
 
         // Check for result file
         let result_path = format!("{}/.grindbot/result.json", active.workspace_path);
@@ -359,7 +366,11 @@ pub async fn startup_cleanup(
                 Ok(info) => info,
                 Err(_) => {
                     // Session not in registry — treat as dead and clean up below
-                    tracing::info!("startup cleanup: session {} not found for {}", active.session_id, ws_name);
+                    tracing::info!(
+                        "startup cleanup: session {} not found for {}",
+                        active.session_id,
+                        ws_name
+                    );
                     let result_path = format!("{}/.grindbot/result.json", active.workspace_path);
                     if io.fs.exists(&result_path) {
                         if let Ok(content) = io.fs.read_to_string(&result_path) {
