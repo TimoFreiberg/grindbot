@@ -12,10 +12,10 @@ use crate::core::state::{
 };
 use crate::io::github::fetch_comments;
 use crate::io::{IoLayer, RebaseResult, SessionInfo};
+use crate::merge_lock::MergeLock;
 use crate::prompt;
 use crate::state_file::{ActiveImplementer, CompletedTask, NeedsFeedbackTask, StateFile};
 use crate::workspace;
-use crate::merge_lock::MergeLock;
 
 /// Run the supervisor daemon.
 pub async fn run(config: Config, dry_run: bool) -> anyhow::Result<()> {
@@ -192,7 +192,9 @@ pub async fn gather_state(
                 Ok(HandoffResult::NeedsFeedback { message, .. }) => {
                     ImplementerStatus::Finished(ImplementerResult::NeedsFeedback { message })
                 }
-                Err(error) => ImplementerStatus::Malformed { error: error.to_string() },
+                Err(error) => ImplementerStatus::Malformed {
+                    error: error.to_string(),
+                },
             }
         } else {
             ImplementerStatus::Running
@@ -587,11 +589,19 @@ pub async fn merge_implementation(
     issue_number: u64,
 ) -> anyhow::Result<()> {
     let repo_path = std::env::current_dir()?.to_string_lossy().to_string();
-    let session = state_file.active_implementers.iter()
+    let session = state_file
+        .active_implementers
+        .iter()
         .find(|active| active.workspace_name == workspace_name)
-        .map(|active| active.session_id.as_str()).unwrap_or("unknown");
+        .map(|active| active.session_id.as_str())
+        .unwrap_or("unknown");
     let _lock = MergeLock::acquire(
-        io.fs.clone(), &repo_path, issue_number, workspace_name, session, "grindbot",
+        io.fs.clone(),
+        &repo_path,
+        issue_number,
+        workspace_name,
+        session,
+        "grindbot",
     )?;
 
     // Refresh and rebase implementer's commits onto current main.
@@ -603,7 +613,8 @@ pub async fn merge_implementation(
     match rebase_result {
         RebaseResult::Success => {
             if let Some(command) = &config.supervisor.final_check_command {
-                let ws_path = find_workspace_path(config, state_file, workspace_name).unwrap_or_default();
+                let ws_path =
+                    find_workspace_path(config, state_file, workspace_name).unwrap_or_default();
                 let output = io.command.run(command, &ws_path)?;
                 if output.status != 0 {
                     anyhow::bail!("final check failed ({}): {}", output.status, output.stderr);
@@ -1021,7 +1032,11 @@ fn log_implementer_progress(state: &SupervisorState) {
             .unwrap_or_default();
         tracing::info!(
             "  impl #{} ({}): {}, {} stalled — {}",
-            imp.issue_number, imp.workspace_name, token_str, imp.stall_cycles, snippet
+            imp.issue_number,
+            imp.workspace_name,
+            token_str,
+            imp.stall_cycles,
+            snippet
         );
         if is_stalled(imp.stall_cycles, threshold) {
             tracing::warn!(

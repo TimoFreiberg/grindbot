@@ -43,7 +43,9 @@ impl Filesystem for MockFilesystem {
 
     fn try_create_exclusive(&self, path: &str, content: &str) -> anyhow::Result<bool> {
         let mut files = self.files.lock().unwrap();
-        if files.contains_key(path) { return Ok(false); }
+        if files.contains_key(path) {
+            return Ok(false);
+        }
         files.insert(path.to_string(), content.to_string());
         Ok(true)
     }
@@ -72,7 +74,13 @@ pub struct MockCommandRunner {
 
 impl MockCommandRunner {
     pub fn new(status: i32) -> Self {
-        Self { output: Arc::new(Mutex::new(CommandOutput { status, stdout: String::new(), stderr: String::new() })) }
+        Self {
+            output: Arc::new(Mutex::new(CommandOutput {
+                status,
+                stdout: String::new(),
+                stderr: String::new(),
+            })),
+        }
     }
 }
 
@@ -155,7 +163,9 @@ impl MockJjClient {
 
 #[async_trait]
 impl JjClient for MockJjClient {
-    async fn fetch(&self) -> anyhow::Result<()> { Ok(()) }
+    async fn fetch(&self) -> anyhow::Result<()> {
+        Ok(())
+    }
 
     async fn init_colocated(&self, _repo_path: &str) -> anyhow::Result<()> {
         Ok(())
@@ -326,7 +336,12 @@ impl PolytokenClient for MockPolytokenClient {
     }
 
     async fn get_state(&self, session: &SessionInfo) -> anyhow::Result<SessionState> {
-        if !self.alive_sessions.lock().unwrap().contains(&session.session_id) {
+        if !self
+            .alive_sessions
+            .lock()
+            .unwrap()
+            .contains(&session.session_id)
+        {
             anyhow::bail!("session not alive: {}", session.session_id);
         }
         Ok(SessionState {

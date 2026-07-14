@@ -38,10 +38,19 @@ fn write_result(workspace_root: &Path, result: &HandoffResult) -> anyhow::Result
 pub fn done_manifest(manifest_path: &Path) -> anyhow::Result<()> {
     let workspace_root = find_workspace_root()?;
     let manifest: HandoffResult = serde_json::from_str(&std::fs::read_to_string(manifest_path)?)?;
-    let HandoffResult::Done { commit, timestamp, issue, summary, evidence, .. } = manifest else {
+    let HandoffResult::Done {
+        commit,
+        timestamp,
+        issue,
+        summary,
+        evidence,
+        ..
+    } = manifest
+    else {
         anyhow::bail!("approved handoff manifest must have status=done");
     };
-    let evidence = evidence.ok_or_else(|| anyhow::anyhow!("approved handoff is missing evidence"))?;
+    let evidence =
+        evidence.ok_or_else(|| anyhow::anyhow!("approved handoff is missing evidence"))?;
     if evidence.plan_review.trim().is_empty()
         || evidence.implementation_review.trim().is_empty()
         || evidence.tests.is_empty()
@@ -51,22 +60,55 @@ pub fn done_manifest(manifest_path: &Path) -> anyhow::Result<()> {
         anyhow::bail!("approved handoff evidence is incomplete or has unresolved findings");
     }
     validate_commit(&workspace_root, &commit)?;
-    write_result(&workspace_root, &HandoffResult::Done {
-        manifest_version: 1, commit: commit.clone(), timestamp, issue, summary,
-        evidence: Some(evidence),
-    })?;
+    write_result(
+        &workspace_root,
+        &HandoffResult::Done {
+            manifest_version: 1,
+            commit: commit.clone(),
+            timestamp,
+            issue,
+            summary,
+            evidence: Some(evidence),
+        },
+    )?;
     println!("Handoff complete: done (commit: {})", commit);
     Ok(())
 }
 
 fn validate_commit(workspace_root: &Path, commit: &str) -> anyhow::Result<()> {
-    let base_commit = std::fs::read_to_string(workspace_root.join(".grindbot/base_commit"))?.trim().to_string();
+    let base_commit = std::fs::read_to_string(workspace_root.join(".grindbot/base_commit"))?
+        .trim()
+        .to_string();
     tracing::debug!(command = "jj log", commit, repository = ?workspace_root, "running external command");
-    let output = std::process::Command::new("jj").args(["log", "-r", commit, "--no-graph", "-R", workspace_root.to_str().unwrap()]).output()?;
-    if !output.status.success() { anyhow::bail!("commit {} does not exist: {}", commit, String::from_utf8_lossy(&output.stderr)); }
+    let output = std::process::Command::new("jj")
+        .args([
+            "log",
+            "-r",
+            commit,
+            "--no-graph",
+            "-R",
+            workspace_root.to_str().unwrap(),
+        ])
+        .output()?;
+    if !output.status.success() {
+        anyhow::bail!(
+            "commit {} does not exist: {}",
+            commit,
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
     let revset = format!("{}::{} ~ {}", base_commit, commit, base_commit);
     tracing::debug!(command = "jj log", revset, repository = ?workspace_root, "running external command");
-    let output = std::process::Command::new("jj").args(["log", "-r", &revset, "--no-graph", "-R", workspace_root.to_str().unwrap()]).output()?;
+    let output = std::process::Command::new("jj")
+        .args([
+            "log",
+            "-r",
+            &revset,
+            "--no-graph",
+            "-R",
+            workspace_root.to_str().unwrap(),
+        ])
+        .output()?;
     if !output.status.success() || String::from_utf8_lossy(&output.stdout).trim().is_empty() {
         anyhow::bail!("commit {} is not ahead of base {}", commit, base_commit);
     }

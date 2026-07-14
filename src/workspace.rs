@@ -161,7 +161,9 @@ mod tests {
 
         fn try_create_exclusive(&self, path: &str, content: &str) -> anyhow::Result<bool> {
             let mut files = self.files.lock().unwrap();
-            if files.contains_key(path) { return Ok(false); }
+            if files.contains_key(path) {
+                return Ok(false);
+            }
             files.insert(path.to_string(), content.to_string());
             Ok(true)
         }

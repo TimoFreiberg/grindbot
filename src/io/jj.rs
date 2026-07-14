@@ -26,12 +26,21 @@ impl RealJjClient {
 impl JjClient for RealJjClient {
     async fn fetch(&self) -> anyhow::Result<()> {
         let output = self.run_jj(&["git", "fetch"]).await?;
-        if !output.status.success() { anyhow::bail!("jj git fetch failed: {}", String::from_utf8_lossy(&output.stderr)); }
+        if !output.status.success() {
+            anyhow::bail!(
+                "jj git fetch failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
         Ok(())
     }
 
     async fn init_colocated(&self, repo_path: &str) -> anyhow::Result<()> {
-        tracing::debug!(command = "jj git init", repository = repo_path, "running external command");
+        tracing::debug!(
+            command = "jj git init",
+            repository = repo_path,
+            "running external command"
+        );
         let output = tokio::process::Command::new("jj")
             .args(["git", "init", repo_path])
             .output()
@@ -46,7 +55,13 @@ impl JjClient for RealJjClient {
     }
 
     async fn create_workspace(&self, dest: &str, name: &str, base_rev: &str) -> anyhow::Result<()> {
-        tracing::debug!(command = "jj workspace add", destination = dest, workspace = name, base_rev, "running external command");
+        tracing::debug!(
+            command = "jj workspace add",
+            destination = dest,
+            workspace = name,
+            base_rev,
+            "running external command"
+        );
         let output = tokio::process::Command::new("jj")
             .args(["workspace", "add", dest, "--name", name, "-r", base_rev])
             .output()
@@ -106,7 +121,12 @@ impl JjClient for RealJjClient {
                     conflicted_files: conflicted,
                 });
             }
-            anyhow::bail!("jj rebase failed for revset '{}' onto '{}': {}", revset, dest, stderr);
+            anyhow::bail!(
+                "jj rebase failed for revset '{}' onto '{}': {}",
+                revset,
+                dest,
+                stderr
+            );
         }
 
         // Even on success, check for conflicts (jj may exit 0 with conflict markers)

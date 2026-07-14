@@ -11,7 +11,11 @@ fn datetime_generator() -> impl hegel::Generator<jiff::Timestamp> {
         .min_value(0)
         .max_value(365 * 50)
         .map(|days| {
-            jiff::civil::date(2024, 1, 1).at(0, 0, 0, 0).in_tz("UTC").unwrap().timestamp()
+            jiff::civil::date(2024, 1, 1)
+                .at(0, 0, 0, 0)
+                .in_tz("UTC")
+                .unwrap()
+                .timestamp()
                 + jiff::Span::new().hours(days * 24)
         })
 }

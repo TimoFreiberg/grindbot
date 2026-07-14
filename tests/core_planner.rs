@@ -14,7 +14,11 @@ fn datetime_generator() -> impl Generator<jiff::Timestamp> {
         .min_value(0)
         .max_value(365 * 50)
         .map(|days| {
-            jiff::civil::date(2024, 1, 1).at(0, 0, 0, 0).in_tz("UTC").unwrap().timestamp()
+            jiff::civil::date(2024, 1, 1)
+                .at(0, 0, 0, 0)
+                .in_tz("UTC")
+                .unwrap()
+                .timestamp()
                 + jiff::Span::new().hours(days * 24)
         })
 }
@@ -205,16 +209,36 @@ fn malformed_handoff_is_diagnostic_cleanup_only() {
         config,
         issues: vec![],
         implementers: vec![ImplementerState {
-            issue_number: 42, session_id: "s".into(), workspace_name: "ws".into(),
-            workspace_path: "/tmp/ws".into(), base_commit: "base".into(),
-            started_at: jiff::Timestamp::now(), status: ImplementerStatus::Malformed { error: "bad json".into() },
-            used_tokens: None, limit_tokens: None, stall_cycles: 0, most_recent_assistant_text: None,
+            issue_number: 42,
+            session_id: "s".into(),
+            workspace_name: "ws".into(),
+            workspace_path: "/tmp/ws".into(),
+            base_commit: "base".into(),
+            started_at: jiff::Timestamp::now(),
+            status: ImplementerStatus::Malformed {
+                error: "bad json".into(),
+            },
+            used_tokens: None,
+            limit_tokens: None,
+            stall_cycles: 0,
+            most_recent_assistant_text: None,
         }],
-        workspaces: vec![], main_head: "main".into(), completed_issues: vec![],
+        workspaces: vec![],
+        main_head: "main".into(),
+        completed_issues: vec![],
     };
     let actions = grindbot::core::planner::plan(&state);
-    assert!(!actions.iter().any(|a| matches!(a, grindbot::core::actions::Action::MergeImplementation { .. })));
-    assert!(actions.iter().any(|a| matches!(a, grindbot::core::actions::Action::PostComment { issue_number: 42, .. })));
+    assert!(!actions.iter().any(|a| matches!(
+        a,
+        grindbot::core::actions::Action::MergeImplementation { .. }
+    )));
+    assert!(actions.iter().any(|a| matches!(
+        a,
+        grindbot::core::actions::Action::PostComment {
+            issue_number: 42,
+            ..
+        }
+    )));
     assert!(actions.iter().any(|a| matches!(a, grindbot::core::actions::Action::CleanupWorkspace { workspace_name, .. } if workspace_name == "ws")));
 }
 

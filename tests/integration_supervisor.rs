@@ -7,8 +7,8 @@
 mod common;
 
 use grindbot::config::Config;
-use grindbot::merge_lock::MergeLock;
 use grindbot::io::{Filesystem, GithubClient, JjClient, PolytokenClient, RebaseResult};
+use grindbot::merge_lock::MergeLock;
 use grindbot::state_file::{ActiveImplementer, StateFile};
 use grindbot::workspace;
 

@@ -37,7 +37,9 @@ impl MergeLock {
         };
         let content = serde_json::to_string_pretty(&metadata)?;
         if !fs.try_create_exclusive(&path, &content)? {
-            let old = fs.read_to_string(&path).unwrap_or_else(|_| "unknown owner".into());
+            let old = fs
+                .read_to_string(&path)
+                .unwrap_or_else(|_| "unknown owner".into());
             anyhow::bail!("merge lock is held: {}", old);
         }
         Ok(Self { fs, path })

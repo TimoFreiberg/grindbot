@@ -18,8 +18,7 @@ pub fn build_prompt(issue: &Issue, github_url: &str, grindbot_path: &str) -> Str
             section.push_str(&format!(
                 "**{}** ({}):\n> {}\n\n",
                 comment.author,
-                jiff::fmt::strtime::format("%Y-%m-%d %H:%M UTC", comment.created_at)
-                    .unwrap(),
+                jiff::fmt::strtime::format("%Y-%m-%d %H:%M UTC", comment.created_at).unwrap(),
                 comment.body.replace('\n', "\n> ")
             ));
         }

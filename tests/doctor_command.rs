@@ -37,7 +37,8 @@ workspaces_dir = ".grindbot-workspaces"
 fn test_doctor_reports_missing_binary() {
     let dir = tempfile::tempdir().unwrap();
     // Use a deliberately nonexistent binary name for polytoken
-    let config_path = make_config_with_polytoken_binary(dir.path(), "nonexistent-polytoken-binary-xyz");
+    let config_path =
+        make_config_with_polytoken_binary(dir.path(), "nonexistent-polytoken-binary-xyz");
 
     let output = Command::new(env!("CARGO_BIN_EXE_grindbot"))
         .args(["doctor", "--config", config_path.to_str().unwrap()])
@@ -82,7 +83,11 @@ fn test_doctor_no_config_still_runs() {
         stdout
     );
     // jj should be checked
-    assert!(stdout.contains("jj"), "doctor should check jj; got: {}", stdout);
+    assert!(
+        stdout.contains("jj"),
+        "doctor should check jj; got: {}",
+        stdout
+    );
 }
 
 #[cfg(ignore)]

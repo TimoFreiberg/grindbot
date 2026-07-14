@@ -351,15 +351,11 @@ fn parse_session_output(stdout: &str) -> anyhow::Result<(String, u16)> {
             .get("session_id")
             .or_else(|| json.get("id"))
             .and_then(|v| v.as_str())
-            .ok_or_else(|| {
-                anyhow::anyhow!("could not find session ID in JSON output: {stdout}")
-            })?;
+            .ok_or_else(|| anyhow::anyhow!("could not find session ID in JSON output: {stdout}"))?;
         let port = json
             .get("port")
             .and_then(|v| v.as_u64())
-            .ok_or_else(|| {
-                anyhow::anyhow!("could not find port in JSON output: {stdout}")
-            })?;
+            .ok_or_else(|| anyhow::anyhow!("could not find port in JSON output: {stdout}"))?;
         return Ok((session_id.to_string(), port as u16));
     }
 
@@ -395,9 +391,7 @@ fn parse_session_output(stdout: &str) -> anyhow::Result<(String, u16)> {
     match (session_id, port) {
         (Some(id), Some(p)) => Ok((id, p)),
         _ => {
-            anyhow::bail!(
-                "could not parse session ID and port from polytoken output: {stdout}"
-            );
+            anyhow::bail!("could not parse session ID and port from polytoken output: {stdout}");
         }
     }
 }

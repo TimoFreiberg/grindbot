@@ -15,10 +15,7 @@ fn test_readme_contains_documentation() {
         readme.contains("## Logging"),
         "README should have a Logging section"
     );
-    assert!(
-        readme.contains("--quiet"),
-        "README should document --quiet"
-    );
+    assert!(readme.contains("--quiet"), "README should document --quiet");
     assert!(
         readme.contains("--verbose"),
         "README should document --verbose"

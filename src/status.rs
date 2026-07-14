@@ -150,7 +150,11 @@ mod tests {
     struct MockGh;
     #[async_trait::async_trait]
     impl GithubClient for MockGh {
-        async fn list_issues(&self, _owner: &str, _repo: &str) -> anyhow::Result<Vec<crate::core::state::Issue>> {
+        async fn list_issues(
+            &self,
+            _owner: &str,
+            _repo: &str,
+        ) -> anyhow::Result<Vec<crate::core::state::Issue>> {
             Ok(vec![])
         }
         async fn post_comment(
@@ -173,7 +177,12 @@ mod tests {
         async fn init_colocated(&self, _repo_path: &str) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn create_workspace(&self, _dest: &str, _name: &str, _base_rev: &str) -> anyhow::Result<()> {
+        async fn create_workspace(
+            &self,
+            _dest: &str,
+            _name: &str,
+            _base_rev: &str,
+        ) -> anyhow::Result<()> {
             Ok(())
         }
         async fn forget_workspace(&self, _name: &str) -> anyhow::Result<()> {
@@ -182,7 +191,11 @@ mod tests {
         async fn list_workspaces(&self) -> anyhow::Result<Vec<String>> {
             Ok(vec![])
         }
-        async fn rebase(&self, _revset: &str, _dest: &str) -> anyhow::Result<crate::io::RebaseResult> {
+        async fn rebase(
+            &self,
+            _revset: &str,
+            _dest: &str,
+        ) -> anyhow::Result<crate::io::RebaseResult> {
             Ok(crate::io::RebaseResult::Success)
         }
         async fn set_bookmark(&self, _name: &str, _rev: &str) -> anyhow::Result<()> {
@@ -205,7 +218,10 @@ mod tests {
     struct MockPtAlive;
     #[async_trait::async_trait]
     impl PolytokenClient for MockPtAlive {
-        async fn spawn_session(&self, _workspace_dir: &str) -> anyhow::Result<crate::io::SessionInfo> {
+        async fn spawn_session(
+            &self,
+            _workspace_dir: &str,
+        ) -> anyhow::Result<crate::io::SessionInfo> {
             Ok(crate::io::SessionInfo {
                 session_id: "test".to_string(),
                 port: 12345,
@@ -213,22 +229,45 @@ mod tests {
                 credential_file: String::new(),
             })
         }
-        async fn set_facet(&self, _session: &crate::io::SessionInfo, _facet: &str) -> anyhow::Result<()> {
+        async fn set_facet(
+            &self,
+            _session: &crate::io::SessionInfo,
+            _facet: &str,
+        ) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn enable_adventurous_handoff(&self, _session: &crate::io::SessionInfo) -> anyhow::Result<()> {
+        async fn enable_adventurous_handoff(
+            &self,
+            _session: &crate::io::SessionInfo,
+        ) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn set_permission_mode(&self, _session: &crate::io::SessionInfo, _mode: &str) -> anyhow::Result<()> {
+        async fn set_permission_mode(
+            &self,
+            _session: &crate::io::SessionInfo,
+            _mode: &str,
+        ) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn set_goal(&self, _session: &crate::io::SessionInfo, _summary: &str) -> anyhow::Result<()> {
+        async fn set_goal(
+            &self,
+            _session: &crate::io::SessionInfo,
+            _summary: &str,
+        ) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn send_prompt(&self, _session: &crate::io::SessionInfo, _content: &str, _max_turns: u32) -> anyhow::Result<()> {
+        async fn send_prompt(
+            &self,
+            _session: &crate::io::SessionInfo,
+            _content: &str,
+            _max_turns: u32,
+        ) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn get_state(&self, _session: &crate::io::SessionInfo) -> anyhow::Result<SessionState> {
+        async fn get_state(
+            &self,
+            _session: &crate::io::SessionInfo,
+        ) -> anyhow::Result<SessionState> {
             Ok(SessionState {
                 turn_in_flight: false,
                 cwd: None,
@@ -268,35 +307,45 @@ mod tests {
         };
 
         let mut state_file = StateFile::default();
-        state_file.active_implementers.push(crate::state_file::ActiveImplementer {
-            issue_number: 42,
-            session_id: "sess-abc".to_string(),
-            workspace_name: "grindbot-42".to_string(),
-            workspace_path: "/tmp/ws42".to_string(),
-            base_commit: "abc".to_string(),
-            started_at: "2024-01-15T12:30:00Z".to_string(),
-            port: 12345,
-            bearer_token: "tok".to_string(),
-            credential_file: "/tmp/cred.json".to_string(),
-            last_used_tokens: None,
-            stall_cycles: 0,
-        });
-        state_file.completed_tasks.push(crate::state_file::CompletedTask {
-            issue_number: 40,
-            commit: "def".to_string(),
-            completed_at: "2024-01-10T00:00:00Z".to_string(),
-        });
-        state_file.needs_feedback.push(crate::state_file::NeedsFeedbackTask {
-            issue_number: 44,
-            message: "Need more info".to_string(),
-            timestamp: "2024-01-12T00:00:00Z".to_string(),
-        });
-        state_file.conflict_retries.push(crate::state_file::ConflictRetry {
-            issue_number: 43,
-            count: 2,
-        });
+        state_file
+            .active_implementers
+            .push(crate::state_file::ActiveImplementer {
+                issue_number: 42,
+                session_id: "sess-abc".to_string(),
+                workspace_name: "grindbot-42".to_string(),
+                workspace_path: "/tmp/ws42".to_string(),
+                base_commit: "abc".to_string(),
+                started_at: "2024-01-15T12:30:00Z".to_string(),
+                port: 12345,
+                bearer_token: "tok".to_string(),
+                credential_file: "/tmp/cred.json".to_string(),
+                last_used_tokens: None,
+                stall_cycles: 0,
+            });
+        state_file
+            .completed_tasks
+            .push(crate::state_file::CompletedTask {
+                issue_number: 40,
+                commit: "def".to_string(),
+                completed_at: "2024-01-10T00:00:00Z".to_string(),
+            });
+        state_file
+            .needs_feedback
+            .push(crate::state_file::NeedsFeedbackTask {
+                issue_number: 44,
+                message: "Need more info".to_string(),
+                timestamp: "2024-01-12T00:00:00Z".to_string(),
+            });
+        state_file
+            .conflict_retries
+            .push(crate::state_file::ConflictRetry {
+                issue_number: 43,
+                count: 2,
+            });
 
-        let output = build_status_output(&config, &io, &state_file).await.unwrap();
+        let output = build_status_output(&config, &io, &state_file)
+            .await
+            .unwrap();
 
         // Verify headers
         assert!(output.contains("Grindbot Status — test/repo"));
@@ -323,7 +372,9 @@ mod tests {
         };
         let state_file = StateFile::default();
 
-        let output = build_status_output(&config, &io, &state_file).await.unwrap();
+        let output = build_status_output(&config, &io, &state_file)
+            .await
+            .unwrap();
 
         assert!(output.contains("Active Implementers: (none)"));
         assert!(output.contains("Completed: (none)"));

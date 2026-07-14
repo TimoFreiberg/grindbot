@@ -109,30 +109,24 @@ async fn main() -> anyhow::Result<()> {
             };
             grindbot::doctor::run(cfg.as_ref()).await?;
         }
-        Command::Handoff { action } => {
-            match action {
-                HandoffAction::Done { manifest } => {
-                    grindbot::handoff::done_manifest(&manifest)?;
-                }
-                HandoffAction::NeedsFeedback {
-                    message,
-                    message_file,
-                } => {
-                    let msg = if let Some(path) = message_file {
-                        std::fs::read_to_string(&path)?
-                            .trim()
-                            .to_string()
-                    } else if let Some(msg) = message {
-                        msg
-                    } else {
-                        anyhow::bail!(
-                            "either --message or --message-file must be provided"
-                        );
-                    };
-                    grindbot::handoff::needs_feedback(&msg)?;
-                }
+        Command::Handoff { action } => match action {
+            HandoffAction::Done { manifest } => {
+                grindbot::handoff::done_manifest(&manifest)?;
             }
-        }
+            HandoffAction::NeedsFeedback {
+                message,
+                message_file,
+            } => {
+                let msg = if let Some(path) = message_file {
+                    std::fs::read_to_string(&path)?.trim().to_string()
+                } else if let Some(msg) = message {
+                    msg
+                } else {
+                    anyhow::bail!("either --message or --message-file must be provided");
+                };
+                grindbot::handoff::needs_feedback(&msg)?;
+            }
+        },
     }
 
     Ok(())

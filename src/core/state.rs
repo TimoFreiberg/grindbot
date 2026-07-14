@@ -134,4 +134,6 @@ pub enum HandoffResult {
     NeedsFeedback { message: String, timestamp: String },
 }
 
-fn default_manifest_version() -> u32 { 1 }
+fn default_manifest_version() -> u32 {
+    1
+}

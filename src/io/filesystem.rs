@@ -33,8 +33,15 @@ impl Filesystem for RealFilesystem {
         if let Some(parent) = std::path::Path::new(path).parent() {
             std::fs::create_dir_all(parent)?;
         }
-        match std::fs::OpenOptions::new().write(true).create_new(true).open(path) {
-            Ok(mut file) => { file.write_all(content.as_bytes())?; Ok(true) }
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(path)
+        {
+            Ok(mut file) => {
+                file.write_all(content.as_bytes())?;
+                Ok(true)
+            }
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => Ok(false),
             Err(error) => Err(error.into()),
         }

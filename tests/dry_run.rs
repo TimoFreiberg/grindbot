@@ -42,7 +42,10 @@ fn test_dry_run_no_side_effects() {
 
     // Snapshot: no state file should exist before
     let state_path = home.join(".local/share/grindbot/test/test/state.json");
-    assert!(!state_path.exists(), "state file should not exist before dry-run");
+    assert!(
+        !state_path.exists(),
+        "state file should not exist before dry-run"
+    );
 
     let output = Command::new(env!("CARGO_BIN_EXE_grindbot"))
         .args([

@@ -85,10 +85,7 @@ async fn check_binary(name: &str, args: &[&str]) -> bool {
             false
         }
         Err(_) => {
-            println!(
-                "  ✗ {:<11} not found. Install or add to PATH.",
-                name
-            );
+            println!("  ✗ {:<11} not found. Install or add to PATH.", name);
             false
         }
     }
@@ -116,7 +113,10 @@ async fn check_gh() -> bool {
                 let account = line
                     .split("account")
                     .nth(1)
-                    .and_then(|s| s.trim_start_matches(|c: char| c.is_whitespace() || c == ':').strip_prefix(' '))
+                    .and_then(|s| {
+                        s.trim_start_matches(|c: char| c.is_whitespace() || c == ':')
+                            .strip_prefix(' ')
+                    })
                     .and_then(|s| s.split_whitespace().next())
                     .unwrap_or("");
                 if !account.is_empty() {
