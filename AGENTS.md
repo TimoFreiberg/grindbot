@@ -40,8 +40,20 @@ Grindbot is split into a **pure decision core** and an **I/O layer**:
 
 1. **Session completion:** File-based + stop hook. The `grindbot handoff` binary writes `.grindbot/result.json`. A stop hook gates session end.
 2. **Ticket queue ordering:** FIFO (oldest first).
-3. **Merge conflict escalation:** Throw away the newer implementation, re-queue the task.
+3. **Merge conflict escalation:** Throw away the newer implementation and park the task after persistent conflicts.
 4. **Permission mode:** Bypass+ with deny rules for dangerous commands.
+
+## Documentation Maintenance
+
+The repository-level surface documentation must stay synchronized with the implementation. When code changes affect the CLI, dependencies or integrations, configuration, agent prompts/controls, or the supervisor lifecycle, update the corresponding files in the same change:
+
+- `CLI.md`
+- `DEPENDENCIES.md`
+- `CONFIGURATION.md`
+- `AGENT_PROMPTS.md`
+- `CORE_LOOP.md`
+
+Verify documented claims against the code and keep these files concise.
 
 ## Version Control
 
