@@ -60,6 +60,12 @@ fn test_readme_contains_documentation() {
         readme.contains("state.json"),
         "README troubleshooting should mention state.json path"
     );
+
+    // cargo-binstall installation
+    assert!(
+        readme.contains("cargo binstall grindbot"),
+        "README should document cargo-binstall installation"
+    );
 }
 
 #[test]

@@ -44,3 +44,17 @@ Real `jj` and Bash are required by the handoff and stop-hook tests. Supervisor
 integration tests use mock I/O and need no live services. `proptest` and
 `tempfile` are dev dependencies (see `Cargo.toml`) used for property tests and
 filesystem fixtures.
+
+## Installation
+
+End users can install prebuilt release binaries with
+[cargo-binstall](https://github.com/cargo-bins/cargo-binstall):
+
+```sh
+cargo binstall grindbot
+```
+
+The `[package.metadata.binstall]` section in `Cargo.toml` tells cargo-binstall
+where to find release assets. Prebuilt binaries are published automatically when
+a `v*` tag is pushed (see the Releasing section in `README.md`). Alternatively,
+build from source with `cargo install --path .`.
