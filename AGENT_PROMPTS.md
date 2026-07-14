@@ -46,15 +46,18 @@ by reviewer subagents before it is accepted.
 
 Investigate the issue and relevant codebase. Write a concrete implementation
 plan. Run the existing `plan-reviewer` workflow, fixing or rebutting findings
-until the plan-reviewer accepts the plan.
+until the plan-reviewer accepts the plan. Fix or rebut all findings and rerun
+reviewers until the plan-reviewer accepts the plan. When the plan passes review,
+hand it off, which will start plan execution.
 
 ### 2. Implement and test
 
 Implement the accepted plan and add/update tests. Run the project checks. Then
 run the repository's existing implementation-review workflow, fixing or
-rebutting findings until the implementation reviewer accepts the result. The
-existing reviewer skills/facets define review behavior; do not invent a new
-review protocol.
+rebutting findings until the implementation reviewer accepts the result. Fix or
+rebut all findings and keep reviewing until the implementation reviewer accepts
+the implementation. Commit your work using jj. The existing reviewer
+skills/facets define review behavior; do not invent a new review protocol.
 
 ### 3. Finish with structured evidence
 
@@ -77,8 +80,8 @@ The commit must contain actual changes and be ahead of the recorded base.
     {grindbot_path} handoff needs-feedback --message "<explanation>"
 
 Do not write any code if you are requesting feedback. Explain clearly what
-information you need and why, providing enough context for the issue author
-to make a decision without reading the codebase.
+information you need and why, providing enough context for the issue author to
+make a decision without reading the codebase.
 
 ### Important
 

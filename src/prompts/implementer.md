@@ -46,8 +46,7 @@ The commit must contain actual changes and be ahead of the recorded base.
 
 ### 4. Need Help?
 
-`needs-feedback` is an intentional early exit. If you need more information
-from the issue author to proceed, run:
+`needs-feedback` is an intentional early exit. If you need more information from the issue author to proceed, run:
 
     {grindbot_path} handoff needs-feedback --message "<explanation>"
 
