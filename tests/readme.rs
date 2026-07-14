@@ -64,3 +64,23 @@ fn test_readme_contains_documentation() {
         "README troubleshooting should mention state.json path"
     );
 }
+
+#[test]
+fn test_agent_prompt_documentation_includes_source_files() {
+    let documentation = include_str!("../AGENT_PROMPTS.md");
+    let implementer = include_str!("../src/prompts/implementer.md");
+    let conflict_resolution = include_str!("../src/prompts/conflict_resolution.md");
+
+    assert!(
+        documentation.contains(implementer),
+        "AGENT_PROMPTS.md must include the complete implementer prompt"
+    );
+    assert!(
+        documentation.contains(conflict_resolution),
+        "AGENT_PROMPTS.md must include the complete conflict-resolution prompt"
+    );
+    assert!(
+        !documentation.contains("<polytoken-ref"),
+        "AGENT_PROMPTS.md should use GitHub-compatible Markdown"
+    );
+}

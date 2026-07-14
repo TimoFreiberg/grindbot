@@ -26,7 +26,7 @@ new task. It is the file `src/prompts/implementer.md`, loaded into the binary
 with `include_str!` and substituted by `build_prompt()` in `src/prompt.rs`.
 Placeholders are shown literally as `{name}`.
 
-```
+```markdown
 You are implementing GitHub issue #{number}: {title}
 
 Issue URL: {url}
@@ -83,6 +83,7 @@ to make a decision without reading the codebase.
   be terminated and treated as a crash.
 ```
 
+
 ### Placeholders
 
 | Placeholder | Substituted with |
@@ -120,7 +121,7 @@ conflict resolution agent. The prompt is the file
 `src/prompts/conflict_resolution.md`, loaded with `include_str!`. It has **no
 placeholders** — it is sent verbatim.
 
-```
+```text
 Resolve the merge conflicts in this workspace. Use the jj-resolve-conflicts skill. Do not make any changes beyond what is needed to resolve the conflicts.
 ```
 
