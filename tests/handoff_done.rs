@@ -144,3 +144,106 @@ fn test_handoff_needs_feedback_writes_result_file() {
         _ => panic!("expected NeedsFeedback result"),
     }
 }
+
+// AC.12: --message-file reads from file and writes to result.json
+#[test]
+fn test_handoff_needs_feedback_message_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let _ = create_jj_repo(dir.path());
+
+    let grindbot_dir = dir.path().join(".grindbot");
+    std::fs::create_dir_all(&grindbot_dir).unwrap();
+
+    // Write a message file
+    let message_path = dir.path().join("message.txt");
+    std::fs::write(&message_path, "Need more info about the API endpoint").unwrap();
+
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_grindbot"))
+        .args([
+            "handoff",
+            "needs-feedback",
+            "--message-file",
+            message_path.to_str().unwrap(),
+        ])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "handoff needs-feedback --message-file failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let result_path = grindbot_dir.join("result.json");
+    assert!(result_path.exists());
+
+    let content = std::fs::read_to_string(&result_path).unwrap();
+    let result: HandoffResult = serde_json::from_str(&content).unwrap();
+
+    match result {
+        HandoffResult::NeedsFeedback { message, .. } => {
+            assert_eq!(message, "Need more info about the API endpoint");
+        }
+        _ => panic!("expected NeedsFeedback result"),
+    }
+}
+
+// AC.12: Providing neither --message nor --message-file produces a clap error
+#[test]
+fn test_handoff_needs_feedback_no_message_errors() {
+    let dir = tempfile::tempdir().unwrap();
+    let _ = create_jj_repo(dir.path());
+
+    let grindbot_dir = dir.path().join(".grindbot");
+    std::fs::create_dir_all(&grindbot_dir).unwrap();
+
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_grindbot"))
+        .args(["handoff", "needs-feedback"])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+
+    assert!(
+        !output.status.success(),
+        "handoff needs-feedback without message or message-file should fail"
+    );
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("--message") || stderr.contains("--message-file") || stderr.contains("required"),
+        "error should mention --message or --message-file; got: {}",
+        stderr
+    );
+}
+
+// AC.12: --message and --message-file are mutually exclusive
+#[test]
+fn test_handoff_needs_feedback_both_message_and_file_errors() {
+    let dir = tempfile::tempdir().unwrap();
+    let _ = create_jj_repo(dir.path());
+
+    let grindbot_dir = dir.path().join(".grindbot");
+    std::fs::create_dir_all(&grindbot_dir).unwrap();
+
+    let message_path = dir.path().join("message.txt");
+    std::fs::write(&message_path, "from file").unwrap();
+
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_grindbot"))
+        .args([
+            "handoff",
+            "needs-feedback",
+            "--message",
+            "from flag",
+            "--message-file",
+            message_path.to_str().unwrap(),
+        ])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+
+    assert!(
+        !output.status.success(),
+        "handoff needs-feedback with both --message and --message-file should fail"
+    );
+}

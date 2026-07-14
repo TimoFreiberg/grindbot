@@ -288,6 +288,9 @@ fn test_state_file_atomic_save_load() {
         workspace_path: "/tmp/grindbot-42".to_string(),
         base_commit: "abc".to_string(),
         started_at: "2024-01-01T00:00:00Z".to_string(),
+        port: 12345,
+        bearer_token: "test-token".to_string(),
+        credential_file: "/tmp/cred.json".to_string(),
     });
 
     state.save_to(&path).unwrap();

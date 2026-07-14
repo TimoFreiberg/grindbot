@@ -40,6 +40,12 @@ pub fn done(commit: &str) -> anyhow::Result<()> {
 
     // Read base commit
     let base_commit_path = workspace_root.join(".grindbot").join("base_commit");
+    if !base_commit_path.exists() {
+        anyhow::bail!(
+            "base_commit file not found at {}. Was this workspace set up by the supervisor?",
+            base_commit_path.display()
+        );
+    }
     let base_commit = std::fs::read_to_string(&base_commit_path)?
         .trim()
         .to_string();
@@ -58,7 +64,7 @@ pub fn done(commit: &str) -> anyhow::Result<()> {
 
     if !log_output.status.success() {
         anyhow::bail!(
-            "commit {} does not exist: {}",
+            "commit {} does not exist in the repository. Run 'jj log' to see available commits.\n{}",
             commit,
             String::from_utf8_lossy(&log_output.stderr)
         );
@@ -91,7 +97,8 @@ pub fn done(commit: &str) -> anyhow::Result<()> {
     let ahead_stdout = String::from_utf8_lossy(&ahead_output.stdout);
     if ahead_stdout.trim().is_empty() {
         anyhow::bail!(
-            "commit {} is identical to base {} — no changes to hand off",
+            "commit {} is identical to base {} — no changes to hand off. \
+             Ensure you have committed your work with 'jj new'.",
             commit,
             base_commit
         );

@@ -40,7 +40,10 @@ impl GithubClient for RealGithubClient {
 
         if !output.status.success() {
             anyhow::bail!(
-                "gh issue list failed: {}",
+                "gh issue list failed for {}/{}: {}\n\
+                 Ensure gh is installed, authenticated (gh auth login), and the repository exists.",
+                owner,
+                repo,
                 String::from_utf8_lossy(&output.stderr)
             );
         }
@@ -100,7 +103,10 @@ impl GithubClient for RealGithubClient {
 
         if !output.status.success() {
             anyhow::bail!(
-                "gh issue comment failed: {}",
+                "gh issue comment failed for issue #{} in {}/{}: {}",
+                issue,
+                owner,
+                repo,
                 String::from_utf8_lossy(&output.stderr)
             );
         }
@@ -126,7 +132,10 @@ pub async fn fetch_comments(owner: &str, repo: &str, issue: u64) -> anyhow::Resu
 
     if !output.status.success() {
         anyhow::bail!(
-            "gh issue view failed: {}",
+            "gh issue view failed for issue #{} in {}/{}: {}",
+            issue,
+            owner,
+            repo,
             String::from_utf8_lossy(&output.stderr)
         );
     }

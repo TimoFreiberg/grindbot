@@ -43,6 +43,27 @@ grindbot handoff done --commit <hash>
 grindbot handoff needs-feedback --message "Need more info about X"
 ```
 
+## Logging
+
+Grindbot uses `tracing` for structured logs. Control verbosity with:
+
+- `--quiet` / `-q` — warnings only
+- `--verbose` / `-v` — debug output
+- `--verbose` / `-vv` — trace output (everything)
+- `RUST_LOG=grindbot=debug` — env var override (takes precedence)
+
+## Commands
+
+```sh
+grindbot supervise --config grindbot.toml    # Run the supervisor daemon
+grindbot supervise --dry-run                 # Preview actions without executing
+grindbot status --config grindbot.toml       # Show current state
+grindbot doctor --config grindbot.toml       # Check dependencies
+grindbot handoff done --commit <hash>        # Signal completion
+grindbot handoff needs-feedback --message "..."  # Request feedback
+grindbot --version                           # Print version
+```
+
 ## How It Works
 
 ```
@@ -75,6 +96,14 @@ When a rebase produces conflicts, the supervisor spawns a one-shot conflict reso
 
 ## Requirements
 
-- [Polytoken](https://github.com/timo/grindbot) 0.5.0+
+- [Polytoken](https://docs.polytoken.dev/introduction/) 0.5.0+
 - [Jujutsu](https://github.com/martinvonz/jj) (jj)
 - [GitHub CLI](https://cli.github.com/) (gh)
+
+## Troubleshooting
+
+- **`gh issue list failed`**: Run `gh auth login` to authenticate, verify `gh repo view {owner}/{repo}` works.
+- **`jj workspace add failed`**: Ensure you're in a jj repo (`jj log` works), and the workspace directory doesn't already exist.
+- **`polytoken new failed`**: Verify the polytoken binary path in config, run `polytoken --version`.
+- **Sessions immediately marked crashed**: Ensure the supervisor can reach the Polytoken daemon's HTTP port (check firewall rules).
+- **State file not found**: The state file is at `~/.local/share/grindbot/{owner}/{repo}/state.json`. The directory is created automatically on first run.

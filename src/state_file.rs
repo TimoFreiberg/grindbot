@@ -23,6 +23,12 @@ pub struct ActiveImplementer {
     pub workspace_path: String,
     pub base_commit: String,
     pub started_at: String,
+    #[serde(default)]
+    pub port: u16,
+    #[serde(default)]
+    pub bearer_token: String,
+    #[serde(default)]
+    pub credential_file: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -105,11 +111,14 @@ impl StateFile {
         Ok(())
     }
 
-    /// Default state file path: ~/.local/share/grindbot/state.json
-    fn default_path(_config: &Config) -> std::path::PathBuf {
+    /// Default state file path: ~/.local/share/grindbot/{owner}/{repo}/state.json
+    fn default_path(config: &Config) -> std::path::PathBuf {
         let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
         std::path::PathBuf::from(home)
-            .join(".local/share/grindbot/state.json")
+            .join(".local/share/grindbot")
+            .join(&config.github.owner)
+            .join(&config.github.repo)
+            .join("state.json")
     }
 
     /// Add an active implementer.
@@ -200,6 +209,9 @@ mod tests {
             workspace_path: "/tmp/grindbot-42".to_string(),
             base_commit: "abc".to_string(),
             started_at: "2024-01-01T00:00:00Z".to_string(),
+            port: 12345,
+            bearer_token: "test-token".to_string(),
+            credential_file: "/tmp/cred.json".to_string(),
         });
         state.add_completed(CompletedTask {
             issue_number: 40,
@@ -243,5 +255,88 @@ mod tests {
         let state = StateFile::load_from(&path).unwrap();
         assert_eq!(state.version, 1);
         let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn test_active_implementer_roundtrip_with_session_info() {
+        let imp = ActiveImplementer {
+            issue_number: 42,
+            session_id: "sess-abc".to_string(),
+            workspace_name: "grindbot-42".to_string(),
+            workspace_path: "/tmp/grindbot-42".to_string(),
+            base_commit: "abc123".to_string(),
+            started_at: "2024-01-15T12:30:00Z".to_string(),
+            port: 8080,
+            bearer_token: "secret-token".to_string(),
+            credential_file: "/tmp/creds.json".to_string(),
+        };
+        let json = serde_json::to_string(&imp).unwrap();
+        let restored: ActiveImplementer = serde_json::from_str(&json).unwrap();
+        assert_eq!(restored.port, 8080);
+        assert_eq!(restored.bearer_token, "secret-token");
+        assert_eq!(restored.credential_file, "/tmp/creds.json");
+        assert_eq!(restored.session_id, "sess-abc");
+    }
+
+    #[test]
+    fn test_old_state_file_deserializes_with_defaults() {
+        // Simulate an old state file that lacks port/bearer_token/credential_file
+        let json = r#"{
+            "version": 1,
+            "active_implementers": [{
+                "issue_number": 42,
+                "session_id": "sess1",
+                "workspace_name": "grindbot-42",
+                "workspace_path": "/tmp/grindbot-42",
+                "base_commit": "abc",
+                "started_at": "2024-01-01T00:00:00Z"
+            }],
+            "completed_tasks": [],
+            "needs_feedback": []
+        }"#;
+        let state: StateFile = serde_json::from_str(json).unwrap();
+        assert_eq!(state.active_implementers.len(), 1);
+        assert_eq!(state.active_implementers[0].port, 0);
+        assert_eq!(state.active_implementers[0].bearer_token, "");
+        assert_eq!(state.active_implementers[0].credential_file, "");
+    }
+
+    #[test]
+    fn test_state_file_path_per_repo() {
+        let config_a = Config {
+            github: crate::config::GithubConfig {
+                owner: "alice".to_string(),
+                repo: "project-a".to_string(),
+                allowlist: vec![],
+            },
+            ..Config::default()
+        };
+        let config_b = Config {
+            github: crate::config::GithubConfig {
+                owner: "alice".to_string(),
+                repo: "project-b".to_string(),
+                allowlist: vec![],
+            },
+            ..Config::default()
+        };
+
+        // SAFETY: This test runs single-threaded; no other code accesses HOME concurrently.
+        unsafe {
+            std::env::set_var("HOME", "/tmp/test-home");
+        }
+        let path_a = StateFile::default_path(&config_a);
+        let path_b = StateFile::default_path(&config_b);
+
+        assert!(
+            path_a.ends_with("alice/project-a/state.json"),
+            "path_a was: {:?}",
+            path_a
+        );
+        assert!(
+            path_b.ends_with("alice/project-b/state.json"),
+            "path_b was: {:?}",
+            path_b
+        );
+        assert_ne!(path_a, path_b);
     }
 }

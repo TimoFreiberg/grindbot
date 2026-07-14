@@ -100,4 +100,119 @@ impl Config {
     pub fn workspace_name(&self, issue_number: u64) -> String {
         format!("{}-{}", self.workspace.prefix, issue_number)
     }
+
+    /// Validate config fields. Pure data check — no subprocess calls.
+    pub fn validate(&self) -> anyhow::Result<()> {
+        if self.github.owner.is_empty() {
+            anyhow::bail!("[github] owner must not be empty");
+        }
+        if self.github.repo.is_empty() {
+            anyhow::bail!("[github] repo must not be empty");
+        }
+        if self.github.allowlist.is_empty() {
+            anyhow::bail!("[github] allowlist must contain at least one GitHub username");
+        }
+        if self.supervisor.max_parallelism == 0 {
+            anyhow::bail!("[supervisor] max_parallelism must be at least 1");
+        }
+        if self.supervisor.poll_interval_secs == 0 {
+            anyhow::bail!("[supervisor] poll_interval_secs must be at least 1");
+        }
+        if self.supervisor.base_branch.is_empty() {
+            anyhow::bail!("[supervisor] base_branch must not be empty");
+        }
+        if self.workspace.prefix.is_empty() {
+            anyhow::bail!("[workspace] prefix must not be empty");
+        }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn valid_config() -> Config {
+        Config {
+            github: GithubConfig {
+                owner: "test".to_string(),
+                repo: "test".to_string(),
+                allowlist: vec!["alice".to_string()],
+            },
+            supervisor: SupervisorConfig {
+                max_parallelism: 2,
+                poll_interval_secs: 30,
+                base_branch: "main".to_string(),
+            },
+            polytoken: PolytokenConfig {
+                binary: "polytoken".to_string(),
+                max_tool_turns: 200,
+            },
+            workspace: WorkspaceConfig {
+                prefix: "grindbot".to_string(),
+                workspaces_dir: ".grindbot-workspaces".to_string(),
+            },
+        }
+    }
+
+    #[test]
+    fn test_config_validation_valid_config() {
+        assert!(valid_config().validate().is_ok());
+    }
+
+    #[test]
+    fn test_config_validation_empty_owner() {
+        let mut cfg = valid_config();
+        cfg.github.owner = String::new();
+        let err = cfg.validate().unwrap_err().to_string();
+        assert!(err.contains("[github] owner"), "got: {err}");
+    }
+
+    #[test]
+    fn test_config_validation_empty_repo() {
+        let mut cfg = valid_config();
+        cfg.github.repo = String::new();
+        let err = cfg.validate().unwrap_err().to_string();
+        assert!(err.contains("[github] repo"), "got: {err}");
+    }
+
+    #[test]
+    fn test_config_validation_empty_allowlist() {
+        let mut cfg = valid_config();
+        cfg.github.allowlist = vec![];
+        let err = cfg.validate().unwrap_err().to_string();
+        assert!(err.contains("[github] allowlist"), "got: {err}");
+    }
+
+    #[test]
+    fn test_config_validation_zero_parallelism() {
+        let mut cfg = valid_config();
+        cfg.supervisor.max_parallelism = 0;
+        let err = cfg.validate().unwrap_err().to_string();
+        assert!(err.contains("max_parallelism"), "got: {err}");
+    }
+
+    #[test]
+    fn test_config_validation_zero_poll_interval() {
+        let mut cfg = valid_config();
+        cfg.supervisor.poll_interval_secs = 0;
+        let err = cfg.validate().unwrap_err().to_string();
+        assert!(err.contains("poll_interval_secs"), "got: {err}");
+    }
+
+    #[test]
+    fn test_config_validation_empty_base_branch() {
+        let mut cfg = valid_config();
+        cfg.supervisor.base_branch = String::new();
+        let err = cfg.validate().unwrap_err().to_string();
+        assert!(err.contains("base_branch"), "got: {err}");
+    }
+
+    #[test]
+    fn test_config_validation_empty_prefix() {
+        let mut cfg = valid_config();
+        cfg.workspace.prefix = String::new();
+        let err = cfg.validate().unwrap_err().to_string();
+        assert!(err.contains("[workspace] prefix"), "got: {err}");
+    }
 }

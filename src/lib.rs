@@ -1,8 +1,10 @@
 pub mod config;
 pub mod core;
+pub mod doctor;
 pub mod handoff;
 pub mod io;
 pub mod prompt;
 pub mod state_file;
+pub mod status;
 pub mod supervisor;
 pub mod workspace;

@@ -36,7 +36,14 @@ impl RealPolytokenClient {
             .bearer_auth(&session.bearer_token)
             .json(body)
             .send()
-            .await?;
+            .await
+            .map_err(|e| {
+                anyhow::anyhow!(
+                    "failed to connect to polytoken daemon at {}: {}",
+                    self.base_url(session),
+                    e
+                )
+            })?;
         Ok(resp)
     }
 
@@ -51,7 +58,14 @@ impl RealPolytokenClient {
             .get(&url)
             .bearer_auth(&session.bearer_token)
             .send()
-            .await?;
+            .await
+            .map_err(|e| {
+                anyhow::anyhow!(
+                    "failed to connect to polytoken daemon at {}: {}",
+                    self.base_url(session),
+                    e
+                )
+            })?;
         let result = resp.json::<R>().await?;
         Ok(result)
     }
@@ -68,8 +82,11 @@ impl PolytokenClient for RealPolytokenClient {
 
         if !output.status.success() {
             anyhow::bail!(
-                "polytoken new failed: {}",
-                String::from_utf8_lossy(&output.stderr)
+                "polytoken new failed (binary: '{}', workspace: '{}'): {}\n--- stdout ---\n{}",
+                self.binary,
+                workspace_dir,
+                String::from_utf8_lossy(&output.stderr),
+                String::from_utf8_lossy(&output.stdout)
             );
         }
 
@@ -108,7 +125,9 @@ impl PolytokenClient for RealPolytokenClient {
         }
         let resp = self.post_json(session, "/facet", &Body { facet }).await?;
         if !resp.status().is_success() {
-            anyhow::bail!("set_facet failed: {}", resp.status());
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("set_facet failed (HTTP {}): {}", status, body);
         }
         Ok(())
     }
@@ -121,7 +140,14 @@ impl PolytokenClient for RealPolytokenClient {
             .get(&url)
             .bearer_auth(&session.bearer_token)
             .send()
-            .await?;
+            .await
+            .map_err(|e| {
+                anyhow::anyhow!(
+                    "failed to connect to polytoken daemon at {}: {}",
+                    self.base_url(session),
+                    e
+                )
+            })?;
 
         if resp.status().is_success() {
             // Already enabled
@@ -134,10 +160,23 @@ impl PolytokenClient for RealPolytokenClient {
             .post(&url)
             .bearer_auth(&session.bearer_token)
             .send()
-            .await?;
+            .await
+            .map_err(|e| {
+                anyhow::anyhow!(
+                    "failed to connect to polytoken daemon at {}: {}",
+                    self.base_url(session),
+                    e
+                )
+            })?;
 
         if !resp.status().is_success() {
-            anyhow::bail!("enable_adventurous_handoff failed: {}", resp.status());
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!(
+                "enable_adventurous_handoff failed (HTTP {}): {}",
+                status,
+                body
+            );
         }
         Ok(())
     }
@@ -151,7 +190,9 @@ impl PolytokenClient for RealPolytokenClient {
             .post_json(session, "/permission-monitor", &Body { mode })
             .await?;
         if !resp.status().is_success() {
-            anyhow::bail!("set_permission_mode failed: {}", resp.status());
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("set_permission_mode failed (HTTP {}): {}", status, body);
         }
         Ok(())
     }
@@ -163,7 +204,9 @@ impl PolytokenClient for RealPolytokenClient {
         }
         let resp = self.post_json(session, "/goal", &Body { summary }).await?;
         if !resp.status().is_success() {
-            anyhow::bail!("set_goal failed: {}", resp.status());
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("set_goal failed (HTTP {}): {}", status, body);
         }
         Ok(())
     }
@@ -190,7 +233,9 @@ impl PolytokenClient for RealPolytokenClient {
             )
             .await?;
         if !resp.status().is_success() {
-            anyhow::bail!("send_prompt failed: {}", resp.status());
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("send_prompt failed (HTTP {}): {}", status, body);
         }
         Ok(())
     }
@@ -217,7 +262,14 @@ impl PolytokenClient for RealPolytokenClient {
             .post(&url)
             .bearer_auth(&session.bearer_token)
             .send()
-            .await?;
+            .await
+            .map_err(|e| {
+                anyhow::anyhow!(
+                    "failed to connect to polytoken daemon at {}: {}",
+                    self.base_url(session),
+                    e
+                )
+            })?;
         if !resp.status().is_success() {
             tracing::warn!("terminate returned non-success: {}", resp.status());
         }
@@ -281,11 +333,15 @@ fn parse_session_output(stdout: &str) -> anyhow::Result<(String, u16)> {
             .get("session_id")
             .or_else(|| json.get("id"))
             .and_then(|v| v.as_str())
-            .ok_or_else(|| anyhow::anyhow!("could not find session ID in JSON output"))?;
+            .ok_or_else(|| {
+                anyhow::anyhow!("could not find session ID in JSON output: {stdout}")
+            })?;
         let port = json
             .get("port")
             .and_then(|v| v.as_u64())
-            .ok_or_else(|| anyhow::anyhow!("could not find port in JSON output"))?;
+            .ok_or_else(|| {
+                anyhow::anyhow!("could not find port in JSON output: {stdout}")
+            })?;
         return Ok((session_id.to_string(), port as u16));
     }
 
@@ -309,17 +365,9 @@ fn parse_session_output(stdout: &str) -> anyhow::Result<(String, u16)> {
     match (session_id, port) {
         (Some(id), Some(p)) => Ok((id, p)),
         _ => {
-            // Last resort: try to extract any hex-like string and number
-            let id = stdout
-                .split_whitespace()
-                .find(|s| s.len() >= 8 && s.chars().all(|c| c.is_alphanumeric()))
-                .ok_or_else(|| anyhow::anyhow!("could not parse session ID from output"))?
-                .to_string();
-            let p = stdout
-                .split_whitespace()
-                .find_map(|s| s.parse::<u16>().ok())
-                .ok_or_else(|| anyhow::anyhow!("could not parse port from output"))?;
-            Ok((id, p))
+            anyhow::bail!(
+                "could not parse session ID and port from polytoken output: {stdout}"
+            );
         }
     }
 }
@@ -342,5 +390,27 @@ mod tests {
         let (id, port) = parse_session_output(stdout).unwrap();
         assert_eq!(id, "abc123");
         assert_eq!(port, 9090);
+    }
+
+    #[test]
+    fn test_parse_session_output_error_includes_raw() {
+        // AC.9 / AC.13: unparseable input should include the raw output in the error
+        let stdout = "garbage output with no session info\nrandom text\n";
+        let err = parse_session_output(stdout).unwrap_err().to_string();
+        assert!(
+            err.contains(stdout),
+            "error should contain raw output; got: {err}"
+        );
+    }
+
+    #[test]
+    fn test_parse_session_output_json_error_includes_raw() {
+        // JSON with missing fields should include raw output
+        let stdout = r#"{"foo":"bar"}"#;
+        let err = parse_session_output(stdout).unwrap_err().to_string();
+        assert!(
+            err.contains(stdout),
+            "error should contain raw output; got: {err}"
+        );
     }
 }

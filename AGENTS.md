@@ -17,12 +17,14 @@ Grindbot is split into a **pure decision core** and an **I/O layer**:
   - `jj.rs` — Jujutsu via `jj` CLI
   - `polytoken.rs` — Polytoken via HTTP API + CLI
   - `filesystem.rs` — Filesystem via `std::fs`
-- `src/supervisor.rs` — Main loop: gather state, plan, execute, wait
+- `src/supervisor.rs` — Main loop: gather state, plan, execute, wait. Graceful shutdown via SIGINT. Dry-run mode. Per-cycle summary logging.
 - `src/workspace.rs` — Workspace setup (jj workspace, hooks, permissions)
 - `src/handoff.rs` — Handoff binary (called by implementer agents)
 - `src/prompt.rs` — Prompt template, stop hook script, permissions YAML
-- `src/state_file.rs` — Persistent state file (active implementers, completed tasks)
-- `src/config.rs` — Configuration parsing
+- `src/state_file.rs` — Persistent state file (active implementers, completed tasks). Per-repo path: `~/.local/share/grindbot/{owner}/{repo}/state.json`. `ActiveImplementer` stores full `SessionInfo` (port, bearer_token, credential_file) so sessions can be checked for liveness after restart.
+- `src/config.rs` — Configuration parsing + validation (`Config::validate()`)
+- `src/status.rs` — `grindbot status` command: shows active implementers (alive/dead), completed tasks, needs-feedback, conflict retries
+- `src/doctor.rs` — `grindbot doctor` command: checks jj, gh (auth), polytoken, config validity, jj repo
 
 ## Testing Conventions
 
@@ -31,6 +33,8 @@ Grindbot is split into a **pure decision core** and an **I/O layer**:
 - **Handoff binary:** Use real jj repos in temp directories. See `tests/handoff_done.rs`.
 - **Stop hook:** Test the bash script directly. See `tests/stop_hook.rs`.
 - **Integration:** Use mock I/O to test supervisor flows. See `tests/integration_supervisor.rs`.
+- **CLI:** Use `env!("CARGO_BIN_EXE_grindbot")` to test the binary. See `tests/cli_basics.rs`, `tests/status_command.rs`, `tests/doctor_command.rs`, `tests/dry_run.rs`.
+- **Documentation:** See `tests/readme.rs` for README content checks.
 
 ## Key Design Decisions
 

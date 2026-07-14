@@ -57,7 +57,10 @@ impl JjClient for RealJjClient {
             .await?;
         if !output.status.success() {
             anyhow::bail!(
-                "jj workspace add failed: {}",
+                "jj workspace add failed for workspace '{}' at '{}' (base: {}): {}",
+                name,
+                dest,
+                base_rev,
                 String::from_utf8_lossy(&output.stderr)
             );
         }
@@ -68,7 +71,8 @@ impl JjClient for RealJjClient {
         let output = self.run_jj(&["workspace", "forget", name]).await?;
         if !output.status.success() {
             anyhow::bail!(
-                "jj workspace forget failed: {}",
+                "jj workspace forget failed for '{}': {}",
+                name,
                 String::from_utf8_lossy(&output.stderr)
             );
         }
@@ -106,7 +110,7 @@ impl JjClient for RealJjClient {
                     conflicted_files: conflicted,
                 });
             }
-            anyhow::bail!("jj rebase failed: {}", stderr);
+            anyhow::bail!("jj rebase failed for revset '{}' onto '{}': {}", revset, dest, stderr);
         }
 
         // Even on success, check for conflicts (jj may exit 0 with conflict markers)
@@ -126,7 +130,9 @@ impl JjClient for RealJjClient {
             .await?;
         if !output.status.success() {
             anyhow::bail!(
-                "jj bookmark set failed: {}",
+                "jj bookmark set failed for '{}' -> '{}': {}",
+                name,
+                rev,
                 String::from_utf8_lossy(&output.stderr)
             );
         }
@@ -171,7 +177,7 @@ impl JjClient for RealJjClient {
                 .await?;
             if !output.status.success() {
                 anyhow::bail!(
-                    "jj log main failed: {}",
+                    "jj log main@origin failed: {}",
                     String::from_utf8_lossy(&output.stderr)
                 );
             }
@@ -190,7 +196,8 @@ impl JjClient for RealJjClient {
             .await?;
         if !output.status.success() {
             anyhow::bail!(
-                "jj git push failed: {}",
+                "jj git push failed for '{}': {}",
+                branch,
                 String::from_utf8_lossy(&output.stderr)
             );
         }
