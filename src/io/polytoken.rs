@@ -300,6 +300,7 @@ impl RealPolytokenClient {
 
         #[derive(serde::Deserialize)]
         struct SessionRecord {
+            #[serde(rename = "session_id")]
             id: String,
             #[serde(default)]
             credential_file_path: Option<String>,
@@ -359,6 +360,18 @@ fn parse_session_output(stdout: &str) -> anyhow::Result<(String, u16)> {
             if let Ok(p) = rest.trim().parse::<u16>() {
                 port = Some(p);
             }
+        } else {
+            // Try token-by-token parsing for key=value pairs on a single line,
+            // e.g. "session_id=abc123 port=8080"
+            for token in lower.split_whitespace() {
+                if let Some(rest) = token.strip_prefix("session_id=") {
+                    session_id = Some(rest.trim().to_string());
+                } else if let Some(rest) = token.strip_prefix("port=") {
+                    if let Ok(p) = rest.trim().parse::<u16>() {
+                        port = Some(p);
+                    }
+                }
+            }
         }
     }
 
@@ -412,5 +425,23 @@ mod tests {
             err.contains(stdout),
             "error should contain raw output; got: {err}"
         );
+    }
+
+    #[test]
+    fn test_parse_session_output_equals_format() {
+        // polytoken new --no-attach emits "session_id=xxx port=yyy"
+        let stdout = "session_id=05z7gk-gush port=49633\n";
+        let (id, port) = parse_session_output(stdout).unwrap();
+        assert_eq!(id, "05z7gk-gush");
+        assert_eq!(port, 49633);
+    }
+
+    #[test]
+    fn test_parse_session_output_equals_format_on_one_line() {
+        // Also handles space-separated key=value on a single line
+        let stdout = "session_id=abc123 port=8080\n";
+        let (id, port) = parse_session_output(stdout).unwrap();
+        assert_eq!(id, "abc123");
+        assert_eq!(port, 8080);
     }
 }

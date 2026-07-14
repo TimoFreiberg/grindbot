@@ -84,7 +84,7 @@ impl JjClient for RealJjClient {
         let workspaces: Vec<String> = text
             .lines()
             .filter(|l| !l.trim().is_empty())
-            .map(|l| l.split_whitespace().next().unwrap_or("").to_string())
+            .map(|l| l.split(':').next().unwrap_or("").trim().to_string())
             .filter(|s| !s.is_empty())
             .collect();
         Ok(workspaces)
@@ -178,7 +178,7 @@ impl JjClient for RealJjClient {
 
     async fn push(&self, remote: &str, branch: &str) -> anyhow::Result<()> {
         let output = self
-            .run_jj(&["git", "push", "-r", branch, "--allow-new"])
+            .run_jj(&["git", "push", "--remote", remote, "--bookmark", branch])
             .await?;
         if !output.status.success() {
             anyhow::bail!(
@@ -187,8 +187,6 @@ impl JjClient for RealJjClient {
                 String::from_utf8_lossy(&output.stderr)
             );
         }
-        // remote is used for future git push compatibility
-        let _ = remote;
         Ok(())
     }
 

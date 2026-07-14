@@ -482,6 +482,10 @@ pub async fn start_implementer(
     let workspaces_dir = format!("{}/{}", repo_path, config.workspace.workspaces_dir);
     let workspace_path = format!("{}/{}", workspaces_dir, workspace_name);
 
+    // 0. Ensure the workspaces parent directory exists — jj workspace add does
+    // not create intermediate parent directories.
+    io.fs.create_dir_all(&workspaces_dir)?;
+
     // 1. Create the jj workspace
     io.jj
         .create_workspace(&workspace_path, workspace_name, base_commit)
