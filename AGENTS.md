@@ -1,30 +1,17 @@
-# AGENTS.md
-
-Instructions for coding agents working on this repository.
-
-## Architecture
+# Architecture
 
 Grindbot is split into a **pure decision core** and an **I/O layer**:
 
-- `src/core/` — Pure decision logic. No I/O. Fully property-testable.
-  - `state.rs` — Data structures (SupervisorState, Issue, ImplementerState, etc.)
-  - `actions.rs` — Action enum (what the planner can emit)
-  - `planner.rs` — `plan(state) -> Vec<Action>` — the main decision function
-  - `filters.rs` — Issue eligibility filtering
+- `src/core/` — Pure decision logic, no I/O.
 - `src/io/` — I/O traits and real implementations
-  - `mod.rs` — Trait definitions (GithubClient, JjClient, PolytokenClient, Filesystem)
-  - `github.rs` — GitHub via `gh` CLI
-  - `jj.rs` — Jujutsu via `jj` CLI
-  - `polytoken.rs` — Polytoken via HTTP API + CLI
-  - `filesystem.rs` — Filesystem via `std::fs`
-- `src/supervisor.rs` — Main loop: gather state, plan, execute, wait. Graceful shutdown via SIGINT. Dry-run mode. Per-cycle summary logging.
+- `src/supervisor.rs` — Main loop
 - `src/workspace.rs` — Workspace setup (jj workspace, hooks, permissions)
 - `src/handoff.rs` — Handoff binary (called by implementer agents)
 - `src/prompt.rs` — Prompt template, stop hook script, permissions YAML
-- `src/state_file.rs` — Persistent state file (active implementers, completed tasks). Per-repo path: `~/.local/share/grindbot/{owner}/{repo}/state.json`. `ActiveImplementer` stores full `SessionInfo` (port, bearer_token, credential_file) so sessions can be checked for liveness after restart.
-- `src/config.rs` — Configuration parsing + validation (`Config::validate()`)
-- `src/status.rs` — `grindbot status` command: shows active implementers (alive/dead), completed tasks, needs-feedback, conflict retries
-- `src/doctor.rs` — `grindbot doctor` command: checks jj, gh (auth), polytoken, config validity, jj repo
+- `src/state_file.rs` — Persistent state file.
+- `src/config.rs` — Configuration parsing + validation
+- `src/status.rs` — `grindbot status` command
+- `src/doctor.rs` — `grindbot doctor` command
 
 ## Testing Conventions
 
