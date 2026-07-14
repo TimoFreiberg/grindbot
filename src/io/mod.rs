@@ -104,6 +104,9 @@ pub struct SessionInfo {
 pub struct SessionState {
     pub turn_in_flight: bool,
     pub cwd: Option<String>,
+    pub used_tokens: Option<u32>,
+    pub limit_tokens: Option<u32>,
+    pub most_recent_assistant_text: Option<String>,
 }
 
 pub trait Filesystem: Send + Sync {

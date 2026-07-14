@@ -235,6 +235,9 @@ pub struct MockPolytokenClient {
     pub terminate_calls: Arc<Mutex<Vec<String>>>,
     pub alive_sessions: Arc<Mutex<std::collections::HashSet<String>>>,
     pub turn_in_flight: Arc<Mutex<bool>>,
+    pub used_tokens: Arc<Mutex<Option<u32>>>,
+    pub limit_tokens: Arc<Mutex<Option<u32>>>,
+    pub most_recent_assistant_text: Arc<Mutex<Option<String>>>,
 }
 
 impl MockPolytokenClient {
@@ -249,6 +252,9 @@ impl MockPolytokenClient {
             terminate_calls: Arc::new(Mutex::new(vec![])),
             alive_sessions: Arc::new(Mutex::new(std::collections::HashSet::new())),
             turn_in_flight: Arc::new(Mutex::new(false)),
+            used_tokens: Arc::new(Mutex::new(None)),
+            limit_tokens: Arc::new(Mutex::new(None)),
+            most_recent_assistant_text: Arc::new(Mutex::new(None)),
         }
     }
 }
@@ -320,9 +326,15 @@ impl PolytokenClient for MockPolytokenClient {
     }
 
     async fn get_state(&self, session: &SessionInfo) -> anyhow::Result<SessionState> {
+        if !self.alive_sessions.lock().unwrap().contains(&session.session_id) {
+            anyhow::bail!("session not alive: {}", session.session_id);
+        }
         Ok(SessionState {
             turn_in_flight: *self.turn_in_flight.lock().unwrap(),
             cwd: Some(session.session_id.clone()),
+            used_tokens: *self.used_tokens.lock().unwrap(),
+            limit_tokens: *self.limit_tokens.lock().unwrap(),
+            most_recent_assistant_text: self.most_recent_assistant_text.lock().unwrap().clone(),
         })
     }
 

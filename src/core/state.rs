@@ -40,6 +40,10 @@ pub struct ImplementerState {
     pub base_commit: String,
     pub started_at: Timestamp,
     pub status: ImplementerStatus,
+    pub used_tokens: Option<u32>,
+    pub limit_tokens: Option<u32>,
+    pub stall_cycles: u32,
+    pub most_recent_assistant_text: Option<String>,
 }
 
 #[derive(Clone, Debug)]

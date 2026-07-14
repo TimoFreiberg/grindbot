@@ -72,6 +72,7 @@ fn config_generator(tc: TestCase) -> Config {
             base_branch: "main".into(),
             merge_lock_timeout_secs: 1800,
             final_check_command: None,
+            stall_threshold_cycles: 5,
         },
         ..Config::default()
     }
@@ -101,6 +102,10 @@ fn linked_state(tc: TestCase) -> SupervisorState {
             base_commit: main_head.clone(),
             started_at: issue.created_at,
             status: ImplementerStatus::Running,
+            used_tokens: None,
+            limit_tokens: None,
+            stall_cycles: 0,
+            most_recent_assistant_text: None,
         });
         workspaces.push(WorkspaceState {
             name: workspace_name,
@@ -203,6 +208,7 @@ fn malformed_handoff_is_diagnostic_cleanup_only() {
             issue_number: 42, session_id: "s".into(), workspace_name: "ws".into(),
             workspace_path: "/tmp/ws".into(), base_commit: "base".into(),
             started_at: jiff::Timestamp::now(), status: ImplementerStatus::Malformed { error: "bad json".into() },
+            used_tokens: None, limit_tokens: None, stall_cycles: 0, most_recent_assistant_text: None,
         }],
         workspaces: vec![], main_head: "main".into(), completed_issues: vec![],
     };
@@ -226,6 +232,10 @@ fn prop_finished_sessions_have_complete_actions(tc: TestCase) {
         status: ImplementerStatus::Finished(ImplementerResult::Done {
             commit: "commit123".into(),
         }),
+        used_tokens: None,
+        limit_tokens: None,
+        stall_cycles: 0,
+        most_recent_assistant_text: None,
     });
     let actions = planner::plan(&state);
     assert!(actions.iter().any(|a| matches!(a, Action::MergeImplementation {
@@ -247,6 +257,10 @@ fn prop_finished_needs_feedback_posts_and_cleans_up(tc: TestCase) {
         status: ImplementerStatus::Finished(ImplementerResult::NeedsFeedback {
             message: "need more detail".into(),
         }),
+        used_tokens: None,
+        limit_tokens: None,
+        stall_cycles: 0,
+        most_recent_assistant_text: None,
     });
     let actions = planner::plan(&state);
     assert_eq!(actions.iter().filter(|action| matches!(action,
@@ -288,6 +302,10 @@ fn duplicate_running_implementers_are_not_started_again() {
             base_commit: "abc".into(),
             started_at: jiff::Timestamp::now(),
             status: ImplementerStatus::Running,
+            used_tokens: None,
+            limit_tokens: None,
+            stall_cycles: 0,
+            most_recent_assistant_text: None,
         });
     }
     assert!(
@@ -327,6 +345,10 @@ fn duplicate_running_implementers_same_workspace_are_not_started_again() {
             base_commit: base_commit.into(),
             started_at: "2024-01-02T00:00:00Z".parse::<jiff::Timestamp>().unwrap(),
             status: ImplementerStatus::Running,
+            used_tokens: None,
+            limit_tokens: None,
+            stall_cycles: 0,
+            most_recent_assistant_text: None,
         });
     }
     assert!(

@@ -27,6 +27,7 @@ fn make_config() -> Config {
             base_branch: "main".to_string(),
             merge_lock_timeout_secs: 1800,
             final_check_command: None,
+            stall_threshold_cycles: 5,
         },
         ..Config::default()
     }
@@ -109,6 +110,8 @@ async fn test_merge_flow_success() {
         port: 0,
         bearer_token: String::new(),
         credential_file: String::new(),
+        last_assistant_text: None,
+        stall_cycles: 0,
     });
     grindbot::supervisor::merge_implementation(
         &config,
@@ -335,6 +338,8 @@ fn test_state_file_atomic_save_load() {
         port: 12345,
         bearer_token: "test-token".to_string(),
         credential_file: "/tmp/cred.json".to_string(),
+        last_assistant_text: None,
+        stall_cycles: 0,
     });
 
     state.save_to(&path).unwrap();
@@ -359,4 +364,69 @@ fn test_state_file_conflict_retry_limit() {
     // Reset
     state.reset_conflict_retry(42);
     assert_eq!(state.conflict_retry_count(42), 0);
+}
+
+// AC.4: gather_state populates token fields from get_state
+#[tokio::test]
+async fn test_gather_state_populates_token_fields() {
+    use grindbot::core::state::ImplementerStatus;
+    use grindbot::supervisor;
+
+    let config = make_config();
+    let fs = std::sync::Arc::new(MockFilesystem::new());
+    let jj = std::sync::Arc::new(MockJjClient::new());
+    let polytoken = std::sync::Arc::new(MockPolytokenClient::new());
+    let github = std::sync::Arc::new(MockGithubClient::new());
+
+    // Configure mock to return token data
+    *polytoken.used_tokens.lock().unwrap() = Some(12000);
+    *polytoken.limit_tokens.lock().unwrap() = Some(200000);
+    *polytoken.most_recent_assistant_text.lock().unwrap() =
+        Some("Reading src/main.rs...".to_string());
+
+    let io = grindbot::io::IoLayer {
+        github: github.clone(),
+        jj: jj.clone(),
+        polytoken: polytoken.clone(),
+        fs: fs.clone(),
+        command: std::sync::Arc::new(common::MockCommandRunner::new(0)),
+    };
+
+    let mut state_file = grindbot::state_file::StateFile::default();
+    state_file.add_implementer(grindbot::state_file::ActiveImplementer {
+        issue_number: 42,
+        session_id: "session".into(),
+        workspace_name: "grindbot-42".into(),
+        workspace_path: "/tmp/grindbot-42".into(),
+        base_commit: "basecommit456".into(),
+        started_at: "2024-01-01T00:00:00Z".into(),
+        port: 12345,
+        bearer_token: "tok".into(),
+        credential_file: "/tmp/cred.json".into(),
+        last_assistant_text: None,
+        stall_cycles: 0,
+    });
+
+    // Register the session as alive in the mock
+    polytoken
+        .alive_sessions
+        .lock()
+        .unwrap()
+        .insert("session".to_string());
+    // Mark the session as having a turn in flight (actively working)
+    *polytoken.turn_in_flight.lock().unwrap() = true;
+
+    let state = supervisor::gather_state(&config, &io, &mut state_file)
+        .await
+        .unwrap();
+
+    assert_eq!(state.implementers.len(), 1);
+    let imp = &state.implementers[0];
+    assert!(matches!(imp.status, ImplementerStatus::Running));
+    assert_eq!(imp.used_tokens, Some(12000));
+    assert_eq!(imp.limit_tokens, Some(200000));
+    assert_eq!(
+        imp.most_recent_assistant_text.as_deref(),
+        Some("Reading src/main.rs...")
+    );
 }

@@ -229,7 +229,13 @@ mod tests {
             Ok(())
         }
         async fn get_state(&self, _session: &crate::io::SessionInfo) -> anyhow::Result<SessionState> {
-            Ok(SessionState { turn_in_flight: false, cwd: None })
+            Ok(SessionState {
+                turn_in_flight: false,
+                cwd: None,
+                used_tokens: None,
+                limit_tokens: None,
+                most_recent_assistant_text: None,
+            })
         }
         async fn terminate(&self, _session: &crate::io::SessionInfo) -> anyhow::Result<()> {
             Ok(())
@@ -272,6 +278,8 @@ mod tests {
             port: 12345,
             bearer_token: "tok".to_string(),
             credential_file: "/tmp/cred.json".to_string(),
+            last_used_tokens: None,
+            stall_cycles: 0,
         });
         state_file.completed_tasks.push(crate::state_file::CompletedTask {
             issue_number: 40,

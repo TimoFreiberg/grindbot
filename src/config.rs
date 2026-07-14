@@ -27,6 +27,8 @@ pub struct SupervisorConfig {
     pub merge_lock_timeout_secs: u64,
     #[serde(default)]
     pub final_check_command: Option<String>,
+    #[serde(default = "default_stall_threshold_cycles")]
+    pub stall_threshold_cycles: u32,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -69,6 +71,9 @@ fn default_workspace_prefix() -> String {
 fn default_workspaces_dir() -> String {
     ".grindbot-workspaces".to_string()
 }
+fn default_stall_threshold_cycles() -> u32 {
+    5
+}
 
 impl Default for Config {
     fn default() -> Self {
@@ -84,6 +89,7 @@ impl Default for Config {
                 base_branch: default_base_branch(),
                 merge_lock_timeout_secs: default_merge_lock_timeout_secs(),
                 final_check_command: None,
+                stall_threshold_cycles: default_stall_threshold_cycles(),
             },
             polytoken: PolytokenConfig {
                 binary: default_polytoken_binary(),
@@ -130,6 +136,9 @@ impl Config {
         if self.supervisor.base_branch.is_empty() {
             anyhow::bail!("[supervisor] base_branch must not be empty");
         }
+        if self.supervisor.stall_threshold_cycles == 0 {
+            anyhow::bail!("[supervisor] stall_threshold_cycles must be at least 1");
+        }
         if self.workspace.prefix.is_empty() {
             anyhow::bail!("[workspace] prefix must not be empty");
         }
@@ -154,6 +163,7 @@ mod tests {
                 base_branch: "main".to_string(),
                 merge_lock_timeout_secs: 1800,
                 final_check_command: None,
+                stall_threshold_cycles: default_stall_threshold_cycles(),
             },
             polytoken: PolytokenConfig {
                 binary: "polytoken".to_string(),
@@ -225,5 +235,21 @@ mod tests {
         cfg.workspace.prefix = String::new();
         let err = cfg.validate().unwrap_err().to_string();
         assert!(err.contains("[workspace] prefix"), "got: {err}");
+    }
+
+    #[test]
+    fn test_stall_threshold_default() {
+        // AC.3: default stall_threshold_cycles is 5
+        let config = Config::default();
+        assert_eq!(config.supervisor.stall_threshold_cycles, 5);
+    }
+
+    #[test]
+    fn test_stall_threshold_validation() {
+        // AC.3: stall_threshold_cycles of 0 is rejected
+        let mut cfg = valid_config();
+        cfg.supervisor.stall_threshold_cycles = 0;
+        let err = cfg.validate().unwrap_err().to_string();
+        assert!(err.contains("stall_threshold_cycles"), "got: {err}");
     }
 }

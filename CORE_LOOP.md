@@ -25,7 +25,8 @@ flowchart TD
     SIG2 -->|no| H
     I -->|yes| P[plan: pure decision function]
     P --> L[Log cycle summary]
-    L --> X[Execute each action, save state after each]
+    L --> PL[Log implementer progress]
+    PL --> X[Execute each action, save state after each]
     X --> T{SIGINT?}
     T -->|no| SLEEP[Sleep poll_interval_secs]
     SLEEP --> H
@@ -39,11 +40,11 @@ flowchart TD
 
 ### Gather state
 
-`gather_state` fetches open GitHub issues via `gh`, enriches allowlisted issues with comments, reads `main@origin` head, and builds implementer and workspace state from the state file plus live session liveness checks.
+`gather_state` fetches open GitHub issues via `gh`, enriches allowlisted issues with comments, reads `main@origin` head, and builds implementer and workspace state from the state file plus live session checks. For each active implementer, it calls `get_state` (single HTTP round-trip) to determine liveness and extract token usage (`used_tokens`/`limit_tokens`) and the last assistant text snippet. Token growth is tracked across cycles in the state file (`last_used_tokens`, `stall_cycles`); a cycle with no token change increments the stall counter, while growth resets it.
 
 ### Main loop
 
-Each cycle: gather state → `plan` → log cycle summary → execute each action (saving state after each) → sleep `poll_interval_secs` (default 30). On SIGINT, the current cycle finishes, state is saved, and the process exits.
+Each cycle: gather state → `plan` → log cycle summary → log per-implementer progress → execute each action (saving state after each) → sleep `poll_interval_secs` (default 30). The progress log shows each running implementer's token usage, stall count, and a snippet of its last assistant message. When `stall_cycles >= stall_threshold_cycles` (default 5), a `warn` is emitted indicating the implementer appears stuck. On SIGINT, the current cycle finishes, state is saved, and the process exits.
 
 ## Planner
 

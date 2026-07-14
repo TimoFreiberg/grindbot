@@ -29,6 +29,10 @@ pub struct ActiveImplementer {
     pub bearer_token: String,
     #[serde(default)]
     pub credential_file: String,
+    #[serde(default)]
+    pub last_assistant_text: Option<String>,
+    #[serde(default)]
+    pub stall_cycles: u32,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -215,6 +219,8 @@ mod tests {
             port: 12345,
             bearer_token: "test-token".to_string(),
             credential_file: "/tmp/cred.json".to_string(),
+            last_assistant_text: None,
+            stall_cycles: 0,
         });
         state.add_completed(CompletedTask {
             issue_number: 40,
@@ -273,6 +279,8 @@ mod tests {
             port: 8080,
             bearer_token: "secret-token".to_string(),
             credential_file: "/tmp/creds.json".to_string(),
+            last_assistant_text: None,
+            stall_cycles: 0,
         };
         let json = serde_json::to_string(&imp).unwrap();
         let restored: ActiveImplementer = serde_json::from_str(&json).unwrap();
@@ -283,8 +291,31 @@ mod tests {
     }
 
     #[test]
+    fn test_active_implementer_roundtrip_with_tracking() {
+        // AC.6: last_assistant_text and stall_cycles survive serialize/deserialize
+        let imp = ActiveImplementer {
+            issue_number: 99,
+            session_id: "sess-track".to_string(),
+            workspace_name: "grindbot-99".to_string(),
+            workspace_path: "/tmp/grindbot-99".to_string(),
+            base_commit: "def456".to_string(),
+            started_at: "2024-06-01T10:00:00Z".to_string(),
+            port: 9999,
+            bearer_token: "tok".to_string(),
+            credential_file: "/tmp/c.json".to_string(),
+            last_assistant_text: Some("working on the thing".to_string()),
+            stall_cycles: 3,
+        };
+        let json = serde_json::to_string(&imp).unwrap();
+        let restored: ActiveImplementer = serde_json::from_str(&json).unwrap();
+        assert_eq!(restored.last_assistant_text, Some("working on the thing".to_string()));
+        assert_eq!(restored.stall_cycles, 3);
+    }
+
+    #[test]
     fn test_old_state_file_deserializes_with_defaults() {
         // Simulate an old state file that lacks port/bearer_token/credential_file
+        // and the new tracking fields (last_assistant_text, stall_cycles)
         let json = r#"{
             "version": 1,
             "active_implementers": [{
@@ -303,6 +334,9 @@ mod tests {
         assert_eq!(state.active_implementers[0].port, 0);
         assert_eq!(state.active_implementers[0].bearer_token, "");
         assert_eq!(state.active_implementers[0].credential_file, "");
+        // AC.2: new tracking fields default correctly
+        assert_eq!(state.active_implementers[0].last_assistant_text, None);
+        assert_eq!(state.active_implementers[0].stall_cycles, 0);
     }
 
     #[test]

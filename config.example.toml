@@ -12,6 +12,7 @@ poll_interval_secs = 30    # Seconds between poll cycles
 base_branch = "main"       # Branch to merge into
 merge_lock_timeout_secs = 1800 # Stale merge-lock timeout
 final_check_command = "cargo test" # Optional final gate run in the workspace
+stall_threshold_cycles = 5   # Warn after N cycles with no token growth
 
 [polytoken]
 binary = "polytoken"       # Path to polytoken binary

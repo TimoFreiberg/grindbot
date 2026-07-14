@@ -27,7 +27,7 @@ pub async fn run(config: Config, dry_run: bool) -> anyhow::Result<()> {
     // Dry-run path: gather state once, plan, print actions, exit.
     // Does NOT call startup_cleanup or state_file.save — no side effects.
     if dry_run {
-        let state = match gather_state(&config, &io, &state_file).await {
+        let state = match gather_state(&config, &io, &mut state_file).await {
             Ok(s) => s,
             Err(e) => {
                 println!("Warning: could not fully gather state: {}", e);
@@ -62,7 +62,7 @@ pub async fn run(config: Config, dry_run: bool) -> anyhow::Result<()> {
 
     loop {
         // 1. Gather state
-        let state = match gather_state(&config, &io, &state_file).await {
+        let state = match gather_state(&config, &io, &mut state_file).await {
             Ok(s) => s,
             Err(e) => {
                 tracing::error!("failed to gather state: {}", e);
@@ -81,6 +81,7 @@ pub async fn run(config: Config, dry_run: bool) -> anyhow::Result<()> {
 
         // 3. Log cycle summary
         log_cycle_summary(&state, &actions);
+        log_implementer_progress(&state);
 
         // 4. Execute actions
         for action in actions {
@@ -130,7 +131,7 @@ fn build_io_layer(config: &Config) -> IoLayer {
 pub async fn gather_state(
     config: &Config,
     io: &IoLayer,
-    state_file: &StateFile,
+    state_file: &mut StateFile,
 ) -> anyhow::Result<SupervisorState> {
     // Fetch issues from GitHub
     let mut issues = io
@@ -154,11 +155,26 @@ pub async fn gather_state(
 
     // Build implementer states from state file + live session checks
     let mut implementers = Vec::new();
-    for active in &state_file.active_implementers {
+    for active in &mut state_file.active_implementers {
         let session_info = reconstruct_session_info(active);
 
-        // Check if session is alive
-        let alive = io.polytoken.is_alive(&session_info).await;
+        // Check if session is alive via get_state (single round-trip)
+        let state_result = io.polytoken.get_state(&session_info).await;
+        let alive = state_result.is_ok();
+
+        // Update stall tracking and extract progress data
+        let (used_tokens, limit_tokens, snippet, stall_cycles, turn_in_flight) = if let Ok(ref ss) = state_result {
+            update_stall_tracking(active, ss.most_recent_assistant_text.as_deref());
+            (
+                ss.used_tokens,
+                ss.limit_tokens,
+                ss.most_recent_assistant_text.clone(),
+                active.stall_cycles,
+                ss.turn_in_flight,
+            )
+        } else {
+            (None, None, None, active.stall_cycles, false)
+        };
 
         // Check for result file
         let result_path = format!("{}/.grindbot/result.json", active.workspace_path);
@@ -190,6 +206,10 @@ pub async fn gather_state(
             base_commit: active.base_commit.clone(),
             started_at: parse_started_at(&active.started_at),
             status,
+            used_tokens,
+            limit_tokens,
+            stall_cycles,
+            most_recent_assistant_text: snippet,
         });
     }
 
@@ -543,6 +563,8 @@ pub async fn start_implementer(
         port: session_info.port,
         bearer_token: session_info.bearer_token.clone(),
         credential_file: session_info.credential_file.clone(),
+        last_assistant_text: None,
+        stall_cycles: 0,
     });
 
     tracing::info!(
@@ -956,6 +978,61 @@ fn preflight_polytoken_check(config: &Config) -> anyhow::Result<()> {
     }
 }
 
+/// Update stall tracking for an active implementer based on most recent assistant text.
+/// Pure function — mutates only the passed-in implementer.
+fn update_stall_tracking(active: &mut ActiveImplementer, current_text: Option<&str>) {
+    match (current_text, active.last_assistant_text.as_deref()) {
+        (Some(current), Some(prev)) if current == prev => {
+            active.stall_cycles += 1;
+        }
+        (Some(current), _) => {
+            active.last_assistant_text = Some(current.to_string());
+            active.stall_cycles = 0;
+        }
+        (None, _) => {
+            // No assistant text available — can't track, leave stall_cycles unchanged
+        }
+    }
+}
+
+/// Pure predicate: should a stall warning be emitted?
+fn is_stalled(stall_cycles: u32, threshold: u32) -> bool {
+    stall_cycles >= threshold
+}
+
+/// Log per-implementer progress and emit stall warnings.
+fn log_implementer_progress(state: &SupervisorState) {
+    let threshold = state.config.supervisor.stall_threshold_cycles;
+    for imp in &state.implementers {
+        if !matches!(imp.status, ImplementerStatus::Running) {
+            continue;
+        }
+        let token_str = match (imp.used_tokens, imp.limit_tokens) {
+            (Some(used), Some(limit)) => format!("{}/{}", used, limit),
+            (Some(used), None) => format!("{} tokens", used),
+            _ => "unknown tokens".to_string(),
+        };
+        let snippet = imp
+            .most_recent_assistant_text
+            .as_deref()
+            .map(|s| s.replace('\n', " "))
+            .map(|s| s.chars().take(80).collect::<String>())
+            .unwrap_or_default();
+        tracing::info!(
+            "  impl #{} ({}): {}, {} stalled — {}",
+            imp.issue_number, imp.workspace_name, token_str, imp.stall_cycles, snippet
+        );
+        if is_stalled(imp.stall_cycles, threshold) {
+            tracing::warn!(
+                "implementer #{} ({}) appears stuck: no assistant text change for {} cycles",
+                imp.issue_number,
+                imp.workspace_name,
+                imp.stall_cycles
+            );
+        }
+    }
+}
+
 /// Log a per-cycle summary with counts of implementer states and planned actions.
 fn log_cycle_summary(state: &SupervisorState, actions: &[Action]) {
     let running = state
@@ -1084,6 +1161,10 @@ mod tests {
                     base_commit: "abc".to_string(),
                     started_at: jiff::Timestamp::now(),
                     status: ImplementerStatus::Running,
+                    used_tokens: None,
+                    limit_tokens: None,
+                    stall_cycles: 0,
+                    most_recent_assistant_text: None,
                 },
                 ImplementerState {
                     issue_number: 2,
@@ -1095,6 +1176,10 @@ mod tests {
                     status: ImplementerStatus::Finished(ImplementerResult::Done {
                         commit: "xyz".to_string(),
                     }),
+                    used_tokens: None,
+                    limit_tokens: None,
+                    stall_cycles: 0,
+                    most_recent_assistant_text: None,
                 },
                 ImplementerState {
                     issue_number: 3,
@@ -1104,6 +1189,10 @@ mod tests {
                     base_commit: "ghi".to_string(),
                     started_at: jiff::Timestamp::now(),
                     status: ImplementerStatus::Crashed,
+                    used_tokens: None,
+                    limit_tokens: None,
+                    stall_cycles: 0,
+                    most_recent_assistant_text: None,
                 },
             ],
             workspaces: vec![],
@@ -1127,11 +1216,104 @@ mod tests {
             port: 8080,
             bearer_token: "secret".to_string(),
             credential_file: "/tmp/cred.json".to_string(),
+            last_assistant_text: None,
+            stall_cycles: 0,
         };
         let info = reconstruct_session_info(&active);
         assert_eq!(info.session_id, "sess-abc");
         assert_eq!(info.port, 8080);
         assert_eq!(info.bearer_token, "secret");
         assert_eq!(info.credential_file, "/tmp/cred.json");
+    }
+
+    fn test_active_implementer() -> ActiveImplementer {
+        ActiveImplementer {
+            issue_number: 1,
+            session_id: "s".to_string(),
+            workspace_name: "ws".to_string(),
+            workspace_path: "/tmp/ws".to_string(),
+            base_commit: "abc".to_string(),
+            started_at: "2024-01-01T00:00:00Z".to_string(),
+            port: 0,
+            bearer_token: String::new(),
+            credential_file: String::new(),
+            last_assistant_text: None,
+            stall_cycles: 0,
+        }
+    }
+
+    #[test]
+    fn test_update_stall_tracking_grow() {
+        // Text changes → stall_cycles resets to 0, last_assistant_text updates
+        let mut imp = test_active_implementer();
+        update_stall_tracking(&mut imp, Some("working on step 1"));
+        assert_eq!(imp.last_assistant_text, Some("working on step 1".to_string()));
+        assert_eq!(imp.stall_cycles, 0);
+
+        update_stall_tracking(&mut imp, Some("working on step 2"));
+        assert_eq!(imp.last_assistant_text, Some("working on step 2".to_string()));
+        assert_eq!(imp.stall_cycles, 0);
+    }
+
+    #[test]
+    fn test_update_stall_tracking_unchanged() {
+        // Text unchanged → stall_cycles increments
+        let mut imp = test_active_implementer();
+        update_stall_tracking(&mut imp, Some("same message"));
+        assert_eq!(imp.stall_cycles, 0);
+
+        update_stall_tracking(&mut imp, Some("same message"));
+        assert_eq!(imp.stall_cycles, 1);
+
+        update_stall_tracking(&mut imp, Some("same message"));
+        assert_eq!(imp.stall_cycles, 2);
+    }
+
+    #[test]
+    fn test_update_stall_tracking_first_observation() {
+        // First observation → stall_cycles = 0, last_assistant_text set
+        let mut imp = test_active_implementer();
+        update_stall_tracking(&mut imp, Some("first message"));
+        assert_eq!(imp.last_assistant_text, Some("first message".to_string()));
+        assert_eq!(imp.stall_cycles, 0);
+    }
+
+    #[test]
+    fn test_update_stall_tracking_none_text() {
+        // None text → no change to tracking
+        let mut imp = test_active_implementer();
+        imp.last_assistant_text = Some("existing".to_string());
+        imp.stall_cycles = 3;
+
+        update_stall_tracking(&mut imp, None);
+        assert_eq!(imp.last_assistant_text, Some("existing".to_string()));
+        assert_eq!(imp.stall_cycles, 3);
+    }
+
+    #[test]
+    fn test_update_stall_tracking_reaches_threshold() {
+        // AC.5: stall count reaches threshold after N unchanged cycles
+        let mut imp = test_active_implementer();
+        let threshold = 5;
+
+        // First observation sets baseline
+        update_stall_tracking(&mut imp, Some("stuck message"));
+        assert!(!is_stalled(imp.stall_cycles, threshold));
+
+        // 5 unchanged cycles → stalled
+        for _ in 0..5 {
+            update_stall_tracking(&mut imp, Some("stuck message"));
+        }
+        assert_eq!(imp.stall_cycles, 5);
+        assert!(is_stalled(imp.stall_cycles, threshold));
+    }
+
+    #[test]
+    fn test_is_stalled_predicate() {
+        // AC.5: predicate returns true at/above threshold, false below
+        let threshold = 5;
+        assert!(!is_stalled(threshold - 1, threshold)); // below
+        assert!(is_stalled(threshold, threshold)); // at threshold
+        assert!(is_stalled(threshold + 1, threshold)); // above threshold
     }
 }

@@ -188,6 +188,7 @@ mod tests {
                 base_branch: "main".to_string(),
                 merge_lock_timeout_secs: 1800,
                 final_check_command: None,
+                stall_threshold_cycles: 5,
             },
             ..Config::default()
         }
@@ -272,6 +273,10 @@ mod tests {
             base_commit: "abc".to_string(),
             started_at: jiff::Timestamp::now(),
             status: ImplementerStatus::Running,
+            used_tokens: None,
+            limit_tokens: None,
+            stall_cycles: 0,
+            most_recent_assistant_text: None,
         };
         let state = make_state(config, vec![issue], vec![imp], vec![]);
         let actions = plan(&state);
@@ -351,6 +356,10 @@ mod tests {
             status: ImplementerStatus::Finished(ImplementerResult::Done {
                 commit: "newcommit".to_string(),
             }),
+            used_tokens: None,
+            limit_tokens: None,
+            stall_cycles: 0,
+            most_recent_assistant_text: None,
         };
         let state = make_state(config, vec![], vec![imp], vec![]);
         let actions = plan(&state);
@@ -373,6 +382,10 @@ mod tests {
             status: ImplementerStatus::Finished(ImplementerResult::NeedsFeedback {
                 message: "Need more info".to_string(),
             }),
+            used_tokens: None,
+            limit_tokens: None,
+            stall_cycles: 0,
+            most_recent_assistant_text: None,
         };
         let state = make_state(config, vec![], vec![imp], vec![]);
         let actions = plan(&state);

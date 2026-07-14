@@ -242,16 +242,31 @@ impl PolytokenClient for RealPolytokenClient {
 
     async fn get_state(&self, session: &SessionInfo) -> anyhow::Result<SessionState> {
         #[derive(serde::Deserialize)]
+        struct ContextUsage {
+            #[serde(default)]
+            used_tokens: Option<u32>,
+            #[serde(default)]
+            limit_tokens: Option<u32>,
+        }
+
+        #[derive(serde::Deserialize)]
         struct StateResponse {
             #[serde(rename = "turn_in_flight")]
             turn_in_flight: bool,
             #[serde(default)]
             cwd: Option<String>,
+            #[serde(default)]
+            context_usage: Option<ContextUsage>,
+            #[serde(default)]
+            most_recent_assistant_text: Option<String>,
         }
         let state: StateResponse = self.get_json(session, "/state").await?;
         Ok(SessionState {
             turn_in_flight: state.turn_in_flight,
             cwd: state.cwd,
+            used_tokens: state.context_usage.as_ref().and_then(|c| c.used_tokens),
+            limit_tokens: state.context_usage.as_ref().and_then(|c| c.limit_tokens),
+            most_recent_assistant_text: state.most_recent_assistant_text,
         })
     }
 
@@ -443,5 +458,78 @@ mod tests {
         let (id, port) = parse_session_output(stdout).unwrap();
         assert_eq!(id, "abc123");
         assert_eq!(port, 8080);
+    }
+
+    #[test]
+    fn test_session_state_deserialization() {
+        // AC.1: SessionState captures used_tokens, limit_tokens, and most_recent_assistant_text
+        let json = r#"{
+            "turn_in_flight": true,
+            "cwd": "/path/to/workspace",
+            "context_usage": { "used_tokens": 12000, "limit_tokens": 200000 },
+            "most_recent_assistant_text": "Reading src/main.rs..."
+        }"#;
+
+        #[derive(serde::Deserialize)]
+        struct ContextUsage {
+            #[serde(default)]
+            used_tokens: Option<u32>,
+            #[serde(default)]
+            limit_tokens: Option<u32>,
+        }
+
+        #[derive(serde::Deserialize)]
+        struct StateResponse {
+            #[serde(rename = "turn_in_flight")]
+            turn_in_flight: bool,
+            #[serde(default)]
+            cwd: Option<String>,
+            #[serde(default)]
+            context_usage: Option<ContextUsage>,
+            #[serde(default)]
+            most_recent_assistant_text: Option<String>,
+        }
+
+        let resp: StateResponse = serde_json::from_str(json).unwrap();
+        assert!(resp.turn_in_flight);
+        assert_eq!(resp.cwd.as_deref(), Some("/path/to/workspace"));
+        let ctx = resp.context_usage.expect("context_usage");
+        assert_eq!(ctx.used_tokens, Some(12000));
+        assert_eq!(ctx.limit_tokens, Some(200000));
+        assert_eq!(
+            resp.most_recent_assistant_text.as_deref(),
+            Some("Reading src/main.rs...")
+        );
+    }
+
+    #[test]
+    fn test_session_state_deserialization_missing_context_usage() {
+        // When context_usage and most_recent_assistant_text are absent, fields default to None
+        let json = r#"{"turn_in_flight": false, "cwd": "/path"}"#;
+
+        #[derive(serde::Deserialize)]
+        struct ContextUsage {
+            #[serde(default)]
+            used_tokens: Option<u32>,
+            #[serde(default)]
+            limit_tokens: Option<u32>,
+        }
+
+        #[derive(serde::Deserialize)]
+        struct StateResponse {
+            #[serde(rename = "turn_in_flight")]
+            turn_in_flight: bool,
+            #[serde(default)]
+            cwd: Option<String>,
+            #[serde(default)]
+            context_usage: Option<ContextUsage>,
+            #[serde(default)]
+            most_recent_assistant_text: Option<String>,
+        }
+
+        let resp: StateResponse = serde_json::from_str(json).unwrap();
+        assert!(!resp.turn_in_flight);
+        assert!(resp.context_usage.is_none());
+        assert!(resp.most_recent_assistant_text.is_none());
     }
 }
