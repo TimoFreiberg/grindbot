@@ -39,8 +39,7 @@ pub fn done(
     commit: &str,
     plan_review: &str,
     implementation_review: &str,
-    tests: &[String],
-    acceptance_mapping: &[String],
+    all_tests_passed: bool,
     summary: &str,
     issue: Option<u64>,
     unresolved_findings: bool,
@@ -49,23 +48,18 @@ pub fn done(
     let evidence = HandoffEvidence {
         plan_review: plan_review.to_string(),
         implementation_review: implementation_review.to_string(),
-        tests: tests
-            .iter()
-            .map(|value| parse_test(value))
-            .collect::<anyhow::Result<Vec<_>>>()?,
-        acceptance_mapping: acceptance_mapping
-            .iter()
-            .map(|value| parse_acceptance(value))
-            .collect::<anyhow::Result<Vec<_>>>()?,
+        all_tests_passed,
         unresolved_findings,
     };
     if evidence.plan_review.trim().is_empty()
         || evidence.implementation_review.trim().is_empty()
-        || evidence.tests.is_empty()
-        || evidence.acceptance_mapping.is_empty()
+        || !evidence.all_tests_passed
         || evidence.unresolved_findings
     {
-        anyhow::bail!("handoff evidence is incomplete or has unresolved findings");
+        anyhow::bail!(
+            "handoff evidence is incomplete or has unresolved findings. \
+             Run 'grindbot handoff done --help' for the required arguments."
+        );
     }
     validate_commit(&workspace_root, commit)?;
     write_result(
@@ -81,32 +75,6 @@ pub fn done(
     )?;
     println!("Handoff complete: done (commit: {})", commit);
     Ok(())
-}
-
-fn parse_test(value: &str) -> anyhow::Result<crate::core::state::TestEvidence> {
-    let (name, result) = value
-        .split_once('=')
-        .ok_or_else(|| anyhow::anyhow!("--test must use NAME=RESULT"))?;
-    if name.trim().is_empty() || result.trim().is_empty() {
-        anyhow::bail!("--test must have non-empty NAME and RESULT");
-    }
-    Ok(crate::core::state::TestEvidence {
-        name: name.trim().to_string(),
-        result: result.trim().to_string(),
-    })
-}
-
-fn parse_acceptance(value: &str) -> anyhow::Result<crate::core::state::AcceptanceTestMapping> {
-    let (acceptance_criterion, verification) = value
-        .split_once('=')
-        .ok_or_else(|| anyhow::anyhow!("--acceptance must use CRITERION=VERIFICATION"))?;
-    if acceptance_criterion.trim().is_empty() || verification.trim().is_empty() {
-        anyhow::bail!("--acceptance must have non-empty CRITERION and VERIFICATION");
-    }
-    Ok(crate::core::state::AcceptanceTestMapping {
-        acceptance_criterion: acceptance_criterion.trim().to_string(),
-        verification: verification.trim().to_string(),
-    })
 }
 
 fn validate_commit(workspace_root: &Path, commit: &str) -> anyhow::Result<()> {
@@ -144,95 +112,12 @@ fn validate_commit(workspace_root: &Path, commit: &str) -> anyhow::Result<()> {
         ])
         .output()?;
     if !output.status.success() || String::from_utf8_lossy(&output.stdout).trim().is_empty() {
-        anyhow::bail!("commit {} is not ahead of base {}", commit, base_commit);
-    }
-    Ok(())
-}
-
-/// Legacy direct commit path retained for reading old callers.
-pub fn done_legacy(commit: &str) -> anyhow::Result<()> {
-    let workspace_root = find_workspace_root()?;
-
-    // Read base commit
-    let base_commit_path = workspace_root.join(".grindbot").join("base_commit");
-    if !base_commit_path.exists() {
         anyhow::bail!(
-            "base_commit file not found at {}. Was this workspace set up by the supervisor?",
-            base_commit_path.display()
-        );
-    }
-    let base_commit = std::fs::read_to_string(&base_commit_path)?
-        .trim()
-        .to_string();
-
-    // Validate commit exists
-    tracing::debug!(command = "jj log", commit, repository = ?workspace_root, "running external command");
-    let log_output = std::process::Command::new("jj")
-        .args([
-            "log",
-            "-r",
-            commit,
-            "--no-graph",
-            "-R",
-            workspace_root.to_str().unwrap(),
-        ])
-        .output()?;
-
-    if !log_output.status.success() {
-        anyhow::bail!(
-            "commit {} does not exist in the repository. Run 'jj log' to see available commits.\n{}",
-            commit,
-            String::from_utf8_lossy(&log_output.stderr)
-        );
-    }
-
-    // Validate commit is ahead of base (not identical to base)
-    // `jj log -r '<base>::<commit> ~ <base>'` should be non-empty
-    let revset = format!("{}::{} ~ {}", base_commit, commit, base_commit);
-    tracing::debug!(command = "jj log", revset, repository = ?workspace_root, "running external command");
-    let ahead_output = std::process::Command::new("jj")
-        .args([
-            "log",
-            "-r",
-            &revset,
-            "--no-graph",
-            "-R",
-            workspace_root.to_str().unwrap(),
-        ])
-        .output()?;
-
-    if !ahead_output.status.success() {
-        // The revset might error if commit == base; that's a failure
-        anyhow::bail!(
-            "commit {} is not ahead of base {}: {}",
-            commit,
-            base_commit,
-            String::from_utf8_lossy(&ahead_output.stderr)
-        );
-    }
-
-    let ahead_stdout = String::from_utf8_lossy(&ahead_output.stdout);
-    if ahead_stdout.trim().is_empty() {
-        anyhow::bail!(
-            "commit {} is identical to base {} — no changes to hand off. \
-             Ensure you have committed your work with 'jj new'.",
+            "commit {} is not ahead of base {}. Ensure your work is committed with 'jj new'.",
             commit,
             base_commit
         );
     }
-
-    let timestamp = jiff::Timestamp::now().to_string();
-    let result = HandoffResult::Done {
-        manifest_version: 1,
-        commit: commit.to_string(),
-        timestamp,
-        issue: None,
-        summary: String::new(),
-        evidence: None,
-    };
-
-    write_result(&workspace_root, &result)?;
-    println!("Handoff complete: done (commit: {})", commit);
     Ok(())
 }
 

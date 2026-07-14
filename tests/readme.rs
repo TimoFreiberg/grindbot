@@ -109,6 +109,51 @@ fn test_agent_prompt_documentation_includes_source_files() {
     );
 }
 
+// AC.5: AGENT_PROMPTS.md stop-hook copy matches src/prompt.rs
+#[test]
+fn test_agent_prompts_stop_hook_matches_prompt_rs() {
+    let documentation = include_str!("../AGENT_PROMPTS.md");
+
+    // Find the stop-hook echo line containing "You must call the handoff binary"
+    let stop_hook_line = documentation
+        .lines()
+        .find(|line| line.contains("You must call the handoff binary"))
+        .unwrap_or_else(|| panic!("AGENT_PROMPTS.md should contain the stop-hook echo line"));
+
+    assert!(
+        stop_hook_line.contains("handoff done --help"),
+        "stop-hook copy should mention 'handoff done --help'; got: {}",
+        stop_hook_line
+    );
+    assert!(
+        !stop_hook_line.contains("handoff done --commit <hash>"),
+        "stop-hook copy should NOT reference the old --commit <hash> API; got: {}",
+        stop_hook_line
+    );
+}
+
+// AC.6: The implementer prompt mentions running --help
+#[test]
+fn test_implementer_prompt_mentions_help() {
+    let implementer = include_str!("../src/prompts/implementer.md");
+    assert!(
+        implementer.contains("--help"),
+        "implementer prompt should mention --help; got: {}",
+        implementer
+    );
+}
+
+// AC.7: CLI.md documents the new --all-tests-passed arg
+#[test]
+fn test_cli_md_documents_all_tests_passed() {
+    let cli_md = include_str!("../CLI.md");
+    assert!(
+        cli_md.contains("--all-tests-passed"),
+        "CLI.md should document --all-tests-passed; got: {}",
+        cli_md
+    );
+}
+
 fn generated_prompt<'a>(documentation: &'a str, name: &str) -> &'a str {
     let begin_marker = format!("<!-- BEGIN GENERATED {name} PROMPT -->");
     let end_marker = format!("<!-- END GENERATED {name} PROMPT -->");

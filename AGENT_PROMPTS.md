@@ -62,23 +62,21 @@ skills/facets define review behavior; do not invent a new review protocol.
 
 ### 3. Finish with structured evidence
 
-Record an acceptance-criteria-to-test mapping and a test inventory/results as
-CLI arguments. Only after both review stages accept, signal completion by running:
+After both review stages accept, signal completion by running:
 
-    {grindbot_path} handoff done --commit <rev> \\
-      --plan-review '<accepted plan review>' \\
-      --implementation-review '<accepted implementation review>' \\
-      --test 'test name=result' \\
-      --acceptance 'criterion=verification' \\
+    {grindbot_path} handoff done --commit <rev> \
+      --plan-review '<accepted plan review>' \
+      --implementation-review '<accepted implementation review>' \
+      --all-tests-passed \
       --summary '<short summary>'
 
-Repeat `--test` and `--acceptance` once per entry. These text values are your
-self-reported review/test/acceptance evidence and audit notes; the supervisor
-records them but does not independently verify them. The command writes the
-result file itself; no workspace manifest file is needed. No operator approval
+Run `{grindbot_path} handoff done --help` to see all available arguments.
+These text values are your self-reported review/test evidence and audit notes;
+the supervisor records them but does not independently verify them. The command
+writes the result file itself; no manifest file is needed. No operator approval
 is required for a clean, fully-reviewed handoff; operator attention is for
-feedback requests or failures.
-The commit must contain actual changes and be ahead of the recorded base.
+feedback requests or failures. The commit must contain actual changes and be
+ahead of the recorded base.
 
 ### 4. Need Help?
 
@@ -99,6 +97,8 @@ notes or instructions intended only for yourself in this message.
 - Your session will not end until you do.
 - After 3 failed attempts to end without calling handoff, the session will
   be terminated and treated as a crash.
+- Run `{grindbot_path} handoff --help` or `{grindbot_path} handoff <subcommand> --help`
+  to discover available commands and arguments.
 <!-- END GENERATED IMPLEMENTER PROMPT -->
 ```
 
@@ -201,7 +201,7 @@ if [ "$COUNT" -ge 3 ]; then
 fi
 
 # No result file and under the counter limit → force the model back to work.
-echo '{"outcome":"continue","reason":"You must call the handoff binary to end your session. Run: grindbot handoff done --commit <hash> OR grindbot handoff needs-feedback --message <text>"}'
+echo '{"outcome":"continue","reason":"You must call the handoff binary to end your session. Run: grindbot handoff done --help for the required reviewed completion arguments, or grindbot handoff needs-feedback --message <text>"}'
 exit 0
 ```
 

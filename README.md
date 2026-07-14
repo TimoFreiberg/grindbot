@@ -46,7 +46,7 @@ workspaces_dir = ".grindbot-workspaces"
 grindbot supervise --config grindbot.toml
 
 # Signal reviewed completion (called by implementer agents inside workspaces)
-grindbot handoff done --commit <hash> --plan-review '<text>' --implementation-review '<text>' --test 'name=result' --acceptance 'criterion=verification'
+grindbot handoff done --commit <rev> --plan-review '<text>' --implementation-review '<text>' --all-tests-passed --summary '<text>'
 grindbot handoff needs-feedback --message "Need more info about X"
 ```
 
@@ -66,7 +66,7 @@ grindbot supervise --config grindbot.toml    # Run the supervisor daemon
 grindbot supervise --dry-run                 # Preview actions without executing
 grindbot status --config grindbot.toml       # Show current state
 grindbot doctor --config grindbot.toml       # Check dependencies
-grindbot handoff done --commit <hash> ...     # Signal reviewed completion
+grindbot handoff done --commit <rev> ...     # Signal reviewed completion (run 'handoff done --help' for all args)
 grindbot handoff needs-feedback --message "..."  # Request feedback
 grindbot --version                           # Print version
 ```
@@ -95,7 +95,7 @@ The codebase is split into a **pure decision core** (no I/O, fully property-test
 
 1. **Eligible:** Issue author is on the allowlist, last activity was by a human, not currently being implemented, not already completed.
 2. **In progress:** Supervisor creates a jj workspace, spawns a Polytoken session in plan mode, and sends the issue as a prompt.
-3. **Done:** Implementer calls `grindbot handoff done --commit <hash>`. Supervisor rebases onto main, resolves conflicts if needed, pushes, posts a comment, and cleans up.
+3. **Done:** Implementer calls `grindbot handoff done --commit <rev> --all-tests-passed`. Supervisor rebases onto main, resolves conflicts if needed, pushes, posts a comment, and cleans up.
 4. **Needs feedback:** Implementer calls `grindbot handoff needs-feedback --message <text>`. Supervisor posts the feedback as a comment and cleans up.
 5. **Crash:** If the daemon dies without a result file, the supervisor cleans up the workspace and the task remains eligible.
 

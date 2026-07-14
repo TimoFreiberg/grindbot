@@ -96,22 +96,10 @@ impl SupervisorState {
 pub struct HandoffEvidence {
     pub plan_review: String,
     pub implementation_review: String,
-    pub tests: Vec<TestEvidence>,
-    pub acceptance_mapping: Vec<AcceptanceTestMapping>,
+    #[serde(default)]
+    pub all_tests_passed: bool,
     #[serde(default)]
     pub unresolved_findings: bool,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub struct TestEvidence {
-    pub name: String,
-    pub result: String,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub struct AcceptanceTestMapping {
-    pub acceptance_criterion: String,
-    pub verification: String,
 }
 
 /// Result file written by the handoff binary, read by the supervisor.

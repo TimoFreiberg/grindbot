@@ -48,7 +48,7 @@ enum Command {
 enum HandoffAction {
     /// Signal that implementation is complete and reviewed
     #[command(
-        after_help = "Examples:\n  grindbot handoff done --commit abc123 --plan-review 'accepted' --implementation-review 'accepted' --test 'cargo test=passed' --acceptance 'AC.1=verified' --summary 'Implemented the feature'\n\nRepeat --test and --acceptance for each entry. The command writes .grindbot/result.json; no manifest file is needed."
+        after_help = "Examples:\n  grindbot handoff done --commit abc123 --plan-review 'accepted' --implementation-review 'accepted' --all-tests-passed --summary 'Implemented the feature'\n\nThe command writes .grindbot/result.json; no manifest file is needed."
     )]
     Done {
         /// jj revision containing the implementation; must be ahead of .grindbot/base_commit
@@ -72,12 +72,12 @@ enum HandoffAction {
             help = "Reviewer attestation for the accepted implementation"
         )]
         implementation_review: String,
-        /// Test inventory entry, formatted as NAME=RESULT; repeat for each test
-        #[arg(long, value_name = "NAME=RESULT", action = clap::ArgAction::Append, required = true, help = "Test inventory entry formatted as NAME=RESULT; repeat for each test (at least one required)")]
-        test: Vec<String>,
-        /// Acceptance mapping entry, formatted as CRITERION=VERIFICATION; repeat for each criterion
-        #[arg(long, value_name = "CRITERION=VERIFICATION", action = clap::ArgAction::Append, required = true, help = "Acceptance mapping formatted as CRITERION=VERIFICATION; repeat for each criterion (at least one required)")]
-        acceptance: Vec<String>,
+        /// Attest that all tests pass
+        #[arg(
+            long,
+            help = "Attest that all tests pass. Required for a successful handoff."
+        )]
+        all_tests_passed: bool,
         /// Short summary of the completed work
         #[arg(
             long,
@@ -102,9 +102,13 @@ enum HandoffAction {
     },
     /// Request more information from the issue author
     NeedsFeedback {
-        #[arg(long)]
+        #[arg(long, help = "Feedback message text")]
         message: Option<String>,
-        #[arg(long, conflicts_with = "message")]
+        #[arg(
+            long,
+            conflicts_with = "message",
+            help = "Path to a file containing the feedback message"
+        )]
         message_file: Option<PathBuf>,
     },
 }
@@ -163,8 +167,7 @@ async fn main() -> anyhow::Result<()> {
                 commit,
                 plan_review,
                 implementation_review,
-                test,
-                acceptance,
+                all_tests_passed,
                 summary,
                 issue,
                 unresolved_findings,
@@ -173,8 +176,7 @@ async fn main() -> anyhow::Result<()> {
                     &commit,
                     &plan_review,
                     &implementation_review,
-                    &test,
-                    &acceptance,
+                    all_tests_passed,
                     &summary,
                     issue,
                     unresolved_findings,
@@ -189,7 +191,9 @@ async fn main() -> anyhow::Result<()> {
                 } else if let Some(msg) = message {
                     msg
                 } else {
-                    anyhow::bail!("either --message or --message-file must be provided");
+                    anyhow::bail!(
+                        "either --message or --message-file must be provided. Run 'grindbot handoff needs-feedback --help' for the required arguments."
+                    );
                 };
                 grindbot::handoff::needs_feedback(&msg)?;
             }

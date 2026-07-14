@@ -70,8 +70,7 @@ grindbot handoff done \\
   --commit REVISION_ID \\
   --plan-review 'accepted after planning review' \\
   --implementation-review 'accepted after implementation review' \\
-  --test 'cargo test=passed' \\
-  --acceptance 'AC.1=verified by integration test' \\
+  --all-tests-passed \\
   --summary 'Short description of completed work'
 ```
 
@@ -80,11 +79,12 @@ grindbot handoff done \\
 | `--commit` | Yes | No | jj revision, strictly ahead of base |
 | `--plan-review` | Yes | No | Non-empty attestation |
 | `--implementation-review` | Yes | No | Non-empty attestation |
-| `--test NAME=RESULT` | Yes | Yes | At least one required |
-| `--acceptance CRITERION=VERIFICATION` | Yes | Yes | At least one required |
+| `--all-tests-passed` | Yes (runtime) | No | Boolean flag; required for successful handoff |
 | `--summary` | No | No | Defaults to empty |
 | `--issue` | No | No | Issue number |
 | `--unresolved-findings` | No | No | Must not be supplied for a successful handoff |
+
+Run `grindbot handoff done --help` to see the full argument list and an example.
 
 Walks up to the nearest `.jj` ancestor, validates the evidence arguments and that the revision exists and is strictly ahead of `.grindbot/base_commit`, then writes `.grindbot/result.json` and resets `.grindbot/stop_counter` (`src/handoff.rs::done`). No input manifest file is required.
 

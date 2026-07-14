@@ -96,10 +96,7 @@ fn test_handoff_done_writes_result_file() {
             "accepted",
             "--implementation-review",
             "accepted",
-            "--test",
-            "cargo test=passed",
-            "--acceptance",
-            "AC=test",
+            "--all-tests-passed",
             "--summary",
             "done",
         ])
@@ -152,10 +149,7 @@ fn test_handoff_done_invalid_commit_fails() {
             "accepted",
             "--implementation-review",
             "accepted",
-            "--test",
-            "test=passed",
-            "--acceptance",
-            "AC=test",
+            "--all-tests-passed",
         ])
         .current_dir(dir.path())
         .output()
@@ -313,5 +307,98 @@ fn test_handoff_needs_feedback_both_message_and_file_errors() {
     assert!(
         !output.status.success(),
         "handoff needs-feedback with both --message and --message-file should fail"
+    );
+}
+
+// AC.1: `handoff done --help` shows the new --all-tests-passed and --plan-review args
+#[test]
+fn test_handoff_done_help_shows_args() {
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_grindbot"))
+        .args(["handoff", "done", "--help"])
+        .output()
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "handoff done --help failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("--all-tests-passed"),
+        "help output should mention --all-tests-passed; got: {}",
+        stdout
+    );
+    assert!(
+        stdout.contains("--plan-review"),
+        "help output should mention --plan-review; got: {}",
+        stdout
+    );
+}
+
+// AC.2: `handoff needs-feedback --help` shows help text for --message
+#[test]
+fn test_handoff_needs_feedback_help_shows_usage() {
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_grindbot"))
+        .args(["handoff", "needs-feedback", "--help"])
+        .output()
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "handoff needs-feedback --help failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("Feedback message text"),
+        "help output should contain help text for --message; got: {}",
+        stdout
+    );
+}
+
+// AC.3: `handoff done` without --all-tests-passed fails with a --help hint
+#[test]
+fn test_handoff_done_missing_all_tests_passed_fails() {
+    let dir = tempfile::tempdir().unwrap();
+    let _ = create_jj_repo(dir.path());
+
+    let grindbot_dir = dir.path().join(".grindbot");
+    std::fs::create_dir_all(&grindbot_dir).unwrap();
+
+    // Write a dummy base_commit so find_workspace_root + validate_commit can
+    // proceed; the evidence check should fail before commit validation.
+    let base = get_base_commit(dir.path());
+    std::fs::write(grindbot_dir.join("base_commit"), &base).unwrap();
+
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_grindbot"))
+        .args([
+            "handoff",
+            "done",
+            "--commit",
+            "@",
+            "--plan-review",
+            "accepted",
+            "--implementation-review",
+            "accepted",
+            "--summary",
+            "no tests flag",
+        ])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+
+    assert!(
+        !output.status.success(),
+        "handoff done without --all-tests-passed should fail"
+    );
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("--help"),
+        "error message should mention --help; got: {}",
+        stderr
     );
 }
