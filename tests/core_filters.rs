@@ -1,156 +1,169 @@
 //! Property-based tests for the core filters (invariants 10-14).
 
+use chrono::TimeZone;
 use grindbot::config::Config;
 use grindbot::core::filters::is_eligible;
 use grindbot::core::state::{Comment, Issue};
-use proptest::prelude::*;
+use hegel::generators as gs;
+use hegel::{Generator, TestCase};
 
-fn arb_datetime() -> impl Strategy<Value = chrono::DateTime<chrono::Utc>> {
-    (1i64..365 * 50).prop_map(|days| {
-        chrono::TimeZone::with_ymd_and_hms(&chrono::Utc, 2024, 1, 1, 0, 0, 0).unwrap()
-            + chrono::Duration::days(days)
-    })
-}
-
-fn arb_comment() -> impl Strategy<Value = Comment> {
-    (
-        "[a-z]{3,8}",
-        "[a-z ]{5,50}",
-        arb_datetime(),
-        any::<bool>(),
-    )
-        .prop_map(|(author, body, created_at, is_supervisor)| Comment {
-            author,
-            body,
-            created_at,
-            is_supervisor,
+fn datetime_generator() -> impl hegel::Generator<chrono::DateTime<chrono::Utc>> {
+    gs::integers::<i64>()
+        .min_value(0)
+        .max_value(365 * 50)
+        .map(|days| {
+            chrono::Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap()
+                + chrono::Duration::days(days)
         })
 }
 
-fn arb_issue() -> impl Strategy<Value = Issue> {
-    (
-        1u64..1000,
-        "[A-Za-z ]{5,30}",
-        "[a-z ]{5,100}",
-        "[a-z]{3,10}",
-        arb_datetime(),
-        arb_datetime(),
-        proptest::collection::vec(arb_comment(), 0..5),
+fn comment_generator() -> impl hegel::Generator<Comment> {
+    hegel::tuples!(
+        gs::from_regex("[a-z]{3,8}"),
+        gs::from_regex("[a-z ]{5,50}"),
+        datetime_generator(),
+        gs::booleans(),
     )
-        .prop_map(
-            |(number, title, body, author, created_at, updated_at, comments)| Issue {
-                number,
-                title,
-                body,
-                author,
-                created_at,
-                updated_at,
-                comments,
-            },
-        )
-}
-
-fn arb_config() -> impl Strategy<Value = Config> {
-    proptest::collection::vec("[a-z]{3,8}", 1..5).prop_map(|allowlist| Config {
-        github: grindbot::config::GithubConfig {
-            owner: "test".to_string(),
-            repo: "test".to_string(),
-            allowlist,
-        },
-        ..Config::default()
+    .map(|(author, body, created_at, is_supervisor)| Comment {
+        author,
+        body,
+        created_at,
+        is_supervisor,
     })
 }
 
-proptest! {
-    // Invariant 10: An issue with supervisor as last commenter is never eligible.
-    #[test]
-    fn prop_supervisor_last_comment_ineligible(
-        issue in arb_issue(),
-        config in arb_config(),
-        active in proptest::collection::vec(1u64..1000, 0..5),
-        completed in proptest::collection::vec(1u64..1000, 0..5),
-    ) {
-        let mut issue = issue;
-        if issue.comments.is_empty() || !issue.comments.last().unwrap().is_supervisor {
-            issue.comments.push(Comment {
-                author: "grindbot".to_string(),
-                body: "<!-- grindbot --> Done".to_string(),
-                created_at: chrono::Utc::now(),
-                is_supervisor: true,
-            });
-        }
-        prop_assert!(!is_eligible(&issue, &config, &active, &completed));
-    }
+fn issue_generator() -> impl hegel::Generator<Issue> {
+    hegel::tuples!(
+        gs::integers::<u64>().min_value(1).max_value(1000),
+        gs::from_regex("[A-Za-z ]{5,30}"),
+        gs::from_regex("[a-z ]{5,100}"),
+        gs::from_regex("[a-z]{3,10}"),
+        datetime_generator(),
+        datetime_generator(),
+        gs::vecs(comment_generator()).max_size(5),
+    )
+    .map(
+        |(number, title, body, author, created_at, updated_at, comments)| Issue {
+            number,
+            title,
+            body,
+            author,
+            created_at,
+            updated_at,
+            comments,
+        },
+    )
+}
 
-    // Invariant 11: An issue with author not on allowlist is never eligible.
-    #[test]
-    fn prop_non_allowlisted_author_ineligible(
-        issue in arb_issue(),
-        config in arb_config(),
-    ) {
-        let issue = Issue {
-            author: "zzznonexistent".to_string(),
-            ..issue
-        };
-        prop_assert!(!is_eligible(&issue, &config, &[], &[]));
-    }
-
-    // Invariant 12: An issue in the active list is never eligible.
-    #[test]
-    fn prop_active_issue_ineligible(
-        issue in arb_issue(),
-        config in arb_config(),
-    ) {
-        let active = vec![issue.number];
-        let issue = Issue {
-            author: if config.github.allowlist.is_empty() {
-                "x".to_string()
-            } else {
-                config.github.allowlist[0].clone()
+fn config_generator() -> impl hegel::Generator<Config> {
+    gs::vecs(gs::from_regex("[a-z]{3,8}"))
+        .min_size(1)
+        .max_size(5)
+        .map(|allowlist| Config {
+            github: grindbot::config::GithubConfig {
+                owner: "test".to_string(),
+                repo: "test".to_string(),
+                allowlist,
             },
-            comments: vec![],
-            ..issue
-        };
-        prop_assert!(!is_eligible(&issue, &config, &active, &[]));
-    }
+            ..Config::default()
+        })
+}
 
-    // Invariant 13: An issue in the completed list is never eligible.
-    #[test]
-    fn prop_completed_issue_ineligible(
-        issue in arb_issue(),
-        config in arb_config(),
-    ) {
-        let completed = vec![issue.number];
-        let issue = Issue {
-            author: if config.github.allowlist.is_empty() {
-                "x".to_string()
-            } else {
-                config.github.allowlist[0].clone()
-            },
-            comments: vec![],
-            ..issue
-        };
-        prop_assert!(!is_eligible(&issue, &config, &[], &completed));
-    }
+#[hegel::composite]
+fn active_numbers(tc: TestCase, issue_number: u64) -> Vec<u64> {
+    let mut values =
+        tc.draw(gs::vecs(gs::integers::<u64>().min_value(1).max_value(1000)).max_size(5));
+    values.push(issue_number);
+    values
+}
 
-    // Invariant 14: An issue with no comments and allowlisted author is always eligible
-    // (if not active/completed).
-    #[test]
-    fn prop_no_comments_allowlisted_eligible(
-        number in 1u64..1000,
-        config in arb_config(),
-    ) {
-        if let Some(author) = config.github.allowlist.first() {
-            let issue = Issue {
-                number,
-                title: "Test".to_string(),
-                body: "Body".to_string(),
-                author: author.clone(),
-                created_at: chrono::Utc::now(),
-                updated_at: chrono::Utc::now(),
-                comments: vec![],
-            };
-            prop_assert!(is_eligible(&issue, &config, &[], &[]));
-        }
-    }
+#[hegel::test]
+fn prop_supervisor_last_comment_ineligible(tc: TestCase) {
+    let mut issue = tc.draw(issue_generator());
+    let config = tc.draw(config_generator());
+    let active = tc.draw(gs::vecs(gs::integers::<u64>().min_value(1).max_value(1000)).max_size(5));
+    let completed =
+        tc.draw(gs::vecs(gs::integers::<u64>().min_value(1).max_value(1000)).max_size(5));
+    issue.comments.push(Comment {
+        author: "grindbot".to_string(),
+        body: "<!-- grindbot --> Done".to_string(),
+        created_at: issue.updated_at,
+        is_supervisor: true,
+    });
+    assert!(!is_eligible(&issue, &config, &active, &completed));
+}
+
+#[hegel::test]
+fn prop_non_allowlisted_author_ineligible(tc: TestCase) {
+    let issue = Issue {
+        author: "not-allowed".to_string(),
+        ..tc.draw(issue_generator())
+    };
+    let config = tc.draw(config_generator());
+    assert!(!config.github.allowlist.contains(&issue.author));
+    assert!(!is_eligible(&issue, &config, &[], &[]));
+}
+
+#[hegel::test]
+fn prop_active_issue_ineligible(tc: TestCase) {
+    let issue = tc.draw(issue_generator());
+    let mut config = tc.draw(config_generator());
+    let author = config.github.allowlist[0].clone();
+    config.github.allowlist = vec![author.clone()];
+    let issue = Issue {
+        author,
+        comments: vec![],
+        ..issue
+    };
+    let active = tc.draw(active_numbers(issue.number));
+    assert!(!is_eligible(&issue, &config, &active, &[]));
+}
+
+#[hegel::test]
+fn prop_completed_issue_ineligible(tc: TestCase) {
+    let issue = tc.draw(issue_generator());
+    let mut config = tc.draw(config_generator());
+    let author = config.github.allowlist[0].clone();
+    config.github.allowlist = vec![author.clone()];
+    let issue = Issue {
+        author,
+        comments: vec![],
+        ..issue
+    };
+    assert!(!is_eligible(
+        &issue,
+        &config,
+        &[],
+        &[issue.number, issue.number]
+    ));
+}
+
+#[hegel::test]
+fn prop_no_comments_allowlisted_eligible(tc: TestCase) {
+    let config = tc.draw(config_generator());
+    let author = config.github.allowlist[0].clone();
+    let issue = Issue {
+        number: tc.draw(gs::integers::<u64>().min_value(1).max_value(1000)),
+        title: "Test".to_string(),
+        body: "Body".to_string(),
+        author,
+        created_at: tc.draw(datetime_generator()),
+        updated_at: tc.draw(datetime_generator()),
+        comments: vec![],
+    };
+    assert!(is_eligible(&issue, &config, &[], &[]));
+}
+
+#[test]
+fn empty_allowlist_and_empty_comments_are_ineligible() {
+    let issue = Issue {
+        number: 1,
+        title: "t".into(),
+        body: "b".into(),
+        author: "alice".into(),
+        created_at: chrono::Utc::now(),
+        updated_at: chrono::Utc::now(),
+        comments: vec![],
+    };
+    assert!(!is_eligible(&issue, &Config::default(), &[], &[]));
 }

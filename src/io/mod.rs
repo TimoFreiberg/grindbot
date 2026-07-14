@@ -22,12 +22,7 @@ pub trait GithubClient: Send + Sync {
 #[async_trait::async_trait]
 pub trait JjClient: Send + Sync {
     async fn init_colocated(&self, repo_path: &str) -> anyhow::Result<()>;
-    async fn create_workspace(
-        &self,
-        dest: &str,
-        name: &str,
-        base_rev: &str,
-    ) -> anyhow::Result<()>;
+    async fn create_workspace(&self, dest: &str, name: &str, base_rev: &str) -> anyhow::Result<()>;
     async fn forget_workspace(&self, name: &str) -> anyhow::Result<()>;
     async fn list_workspaces(&self) -> anyhow::Result<Vec<String>>;
     async fn rebase(&self, revset: &str, dest: &str) -> anyhow::Result<RebaseResult>;

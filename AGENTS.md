@@ -15,7 +15,7 @@ Grindbot is split into a **pure decision core** and an **I/O layer**:
 
 ## Testing Conventions
 
-- **Pure core:** Use `proptest` for property-based tests. See `tests/core_planner.rs` and `tests/core_filters.rs`.
+- **Pure core:** Use `hegeltest` with `#[hegel::test]` and `TestCase::draw(...)` for property-based tests. See `tests/core_planner.rs` and `tests/core_filters.rs`. Hegel 0.27.1 currently requires a Unix-like environment; use the pinned dependency and run the targeted suites with Cargo.
 - **I/O layer:** Use mock trait implementations. See `tests/common/mod.rs` for shared mocks.
 - **Handoff binary:** Use real jj repos in temp directories. See `tests/handoff_done.rs`.
 - **Stop hook:** Test the bash script directly. See `tests/stop_hook.rs`.

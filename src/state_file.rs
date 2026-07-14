@@ -151,7 +151,10 @@ impl StateFile {
 
     /// Get the list of completed issue numbers.
     pub fn completed_issues(&self) -> Vec<u64> {
-        self.completed_tasks.iter().map(|t| t.issue_number).collect()
+        self.completed_tasks
+            .iter()
+            .map(|t| t.issue_number)
+            .collect()
     }
 
     /// Get the list of active issue numbers.
@@ -249,7 +252,8 @@ mod tests {
 
     #[test]
     fn test_version_mismatch_resets() {
-        let json = r#"{"version":99,"active_implementers":[],"completed_tasks":[],"needs_feedback":[]}"#;
+        let json =
+            r#"{"version":99,"active_implementers":[],"completed_tasks":[],"needs_feedback":[]}"#;
         let path = std::env::temp_dir().join("grindbot_test_version.json");
         std::fs::write(&path, json).unwrap();
         let state = StateFile::load_from(&path).unwrap();

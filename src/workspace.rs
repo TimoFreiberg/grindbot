@@ -2,9 +2,7 @@ use std::path::PathBuf;
 
 use crate::config::Config;
 use crate::io::Filesystem;
-use crate::prompt::{
-    hooks_json, hooks_json_always_stop, PERMISSIONS_YAML, STOP_HOOK_SCRIPT,
-};
+use crate::prompt::{PERMISSIONS_YAML, STOP_HOOK_SCRIPT, hooks_json, hooks_json_always_stop};
 
 /// Set up a workspace for an implementer session.
 ///
@@ -134,9 +132,7 @@ mod tests {
     impl MockFilesystem {
         fn new() -> Self {
             Self {
-                files: std::sync::Arc::new(Mutex::new(
-                    std::collections::HashMap::new(),
-                )),
+                files: std::sync::Arc::new(Mutex::new(std::collections::HashMap::new())),
             }
         }
 
@@ -185,16 +181,22 @@ mod tests {
         setup_workspace(&config, repo_path, 42, "abc123", &fs).unwrap();
 
         // Check base_commit
-        let base = fs.get("/tmp/test-repo/.grindbot-workspaces/grindbot-42/.grindbot/base_commit").unwrap();
+        let base = fs
+            .get("/tmp/test-repo/.grindbot-workspaces/grindbot-42/.grindbot/base_commit")
+            .unwrap();
         assert_eq!(base, "abc123");
 
         // Check hooks.json exists
-        let hooks = fs.get("/tmp/test-repo/.grindbot-workspaces/grindbot-42/.polytoken/hooks.json").unwrap();
+        let hooks = fs
+            .get("/tmp/test-repo/.grindbot-workspaces/grindbot-42/.polytoken/hooks.json")
+            .unwrap();
         assert!(hooks.contains("grindbot-gate"));
         assert!(hooks.contains("stop"));
 
         // Check permissions.yaml exists
-        let perms = fs.get("/tmp/test-repo/.grindbot-workspaces/grindbot-42/.polytoken/permissions.yaml").unwrap();
+        let perms = fs
+            .get("/tmp/test-repo/.grindbot-workspaces/grindbot-42/.polytoken/permissions.yaml")
+            .unwrap();
         assert!(perms.contains("deny"));
         assert!(perms.contains("rm"));
         assert!(perms.contains("git"));

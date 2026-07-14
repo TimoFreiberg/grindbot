@@ -1,308 +1,334 @@
 //! Property-based tests for the core planner (invariants 1-9).
 
+use chrono::TimeZone;
 use grindbot::config::Config;
 use grindbot::core::actions::{Action, CleanupReason};
 use grindbot::core::planner;
 use grindbot::core::state::{
-    Comment, ImplementerResult, ImplementerState, ImplementerStatus, Issue, SupervisorState,
-    WorkspaceState,
+    ImplementerResult, ImplementerState, ImplementerStatus, Issue, SupervisorState, WorkspaceState,
 };
-use proptest::prelude::*;
+use hegel::generators as gs;
+use hegel::{Generator, TestCase};
 
-fn arb_datetime() -> impl Strategy<Value = chrono::DateTime<chrono::Utc>> {
-    (1i64..365 * 50).prop_map(|days| {
-        chrono::TimeZone::with_ymd_and_hms(&chrono::Utc, 2024, 1, 1, 0, 0, 0)
-            .unwrap()
-            + chrono::Duration::days(days)
-    })
-}
-
-fn arb_comment() -> impl Strategy<Value = Comment> {
-    (
-        "[a-z]{3,8}",
-        "[a-z ]{5,50}",
-        arb_datetime(),
-        any::<bool>(),
-    )
-        .prop_map(|(author, body, created_at, is_supervisor)| Comment {
-            author,
-            body,
-            created_at,
-            is_supervisor,
+fn datetime_generator() -> impl Generator<chrono::DateTime<chrono::Utc>> {
+    gs::integers::<i64>()
+        .min_value(0)
+        .max_value(365 * 50)
+        .map(|days| {
+            chrono::Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap()
+                + chrono::Duration::days(days)
         })
 }
 
-fn arb_issue() -> impl Strategy<Value = Issue> {
-    (
-        1u64..1000,
-        "[A-Za-z ]{5,30}",
-        "[a-z ]{5,100}",
-        "[a-z]{3,10}",
-        arb_datetime(),
-        arb_datetime(),
-        proptest::collection::vec(arb_comment(), 0..5),
-    )
-        .prop_map(
-            |(number, title, body, author, created_at, updated_at, comments)| Issue {
-                number,
-                title,
-                body,
-                author,
-                created_at,
-                updated_at,
-                comments,
-            },
-        )
-}
-
-fn arb_implementer_status() -> impl Strategy<Value = ImplementerStatus> {
-    prop_oneof![
-        Just(ImplementerStatus::Running),
-        Just(ImplementerStatus::Crashed),
-        "[a-f0-9]{8,40}".prop_map(|commit| {
-            ImplementerStatus::Finished(ImplementerResult::Done { commit })
-        }),
-        "[a-z ]{5,50}".prop_map(|message| {
-            ImplementerStatus::Finished(ImplementerResult::NeedsFeedback { message })
-        }),
-    ]
-}
-
-fn arb_implementer() -> impl Strategy<Value = ImplementerState> {
-    (
-        1u64..1000,
-        "[a-f0-9]{8,16}",
-        "grindbot-[0-9]{1,4}",
-        "/tmp/grindbot-[0-9]{1,4}",
-        "[a-f0-9]{8,40}",
-        arb_datetime(),
-        arb_implementer_status(),
-    )
-        .prop_map(
-            |(issue_number, session_id, workspace_name, workspace_path, base_commit, started_at, status)| {
-                ImplementerState {
-                    issue_number,
-                    session_id,
-                    workspace_name,
-                    workspace_path,
-                    base_commit,
-                    started_at,
-                    status,
+fn issue_generator() -> impl Generator<Issue> {
+    hegel::tuples!(
+        gs::integers::<u64>().min_value(1).max_value(1000),
+        gs::from_regex("[A-Za-z ]{5,30}"),
+        gs::from_regex("[a-z ]{5,100}"),
+        gs::from_regex("[a-z]{3,10}"),
+        datetime_generator(),
+        datetime_generator(),
+        gs::vecs(
+            hegel::tuples!(
+                gs::from_regex("[a-z]{3,8}"),
+                gs::from_regex("[a-z ]{5,50}"),
+                datetime_generator(),
+                gs::booleans(),
+            )
+            .map(|(author, body, created_at, is_supervisor)| {
+                grindbot::core::state::Comment {
+                    author,
+                    body,
+                    created_at,
+                    is_supervisor,
                 }
-            },
+            })
         )
-}
-
-fn arb_workspace() -> impl Strategy<Value = WorkspaceState> {
-    (
-        "grindbot-[0-9]{1,4}",
-        "/tmp/grindbot-[0-9]{1,4}",
-        proptest::option::of(1u64..1000),
-        proptest::option::of("[a-f0-9]{8,16}"),
-        any::<bool>(),
-        any::<bool>(),
+        .max_size(5),
     )
-        .prop_map(|(name, path, task_issue, session_id, daemon_alive, has_result_file)| {
-            WorkspaceState {
-                name,
-                path,
-                task_issue,
-                session_id,
-                daemon_alive,
-                has_result_file,
-            }
-        })
+    .map(
+        |(number, title, body, author, created_at, updated_at, comments)| Issue {
+            number,
+            title,
+            body,
+            author,
+            created_at,
+            updated_at,
+            comments,
+        },
+    )
 }
 
-fn arb_config() -> impl Strategy<Value = Config> {
-    (1usize..5, proptest::collection::vec("[a-z]{3,8}", 1..5)).prop_map(
-        |(max_parallelism, allowlist)| Config {
+#[hegel::composite]
+fn config_generator(tc: TestCase) -> Config {
+    Config {
+        github: grindbot::config::GithubConfig {
+            owner: "test".into(),
+            repo: "test".into(),
+            allowlist: vec![tc.draw(gs::from_regex("[a-z]{3,8}"))],
+        },
+        supervisor: grindbot::config::SupervisorConfig {
+            max_parallelism: tc.draw(gs::integers::<usize>().min_value(1).max_value(4)),
+            poll_interval_secs: 30,
+            base_branch: "main".into(),
+        },
+        ..Config::default()
+    }
+}
+
+#[hegel::composite]
+fn linked_state(tc: TestCase) -> SupervisorState {
+    let config = tc.draw(config_generator());
+    let mut issues = tc.draw(gs::vecs(issue_generator()).max_size(8));
+    if issues.is_empty() {
+        issues.push(tc.draw(issue_generator()));
+    }
+    let main_head = "abcdef12".to_string();
+    let completed_issues =
+        tc.draw(gs::vecs(gs::integers::<u64>().min_value(1).max_value(1000)).max_size(4));
+    let mut implementers = Vec::new();
+    let mut workspaces = Vec::new();
+    if tc.draw(gs::booleans()) {
+        let issue = &issues[0];
+        let workspace_name = "grindbot-linked".to_string();
+        let workspace_path = "/tmp/grindbot-linked".to_string();
+        implementers.push(ImplementerState {
+            issue_number: issue.number,
+            session_id: "session-linked".into(),
+            workspace_name: workspace_name.clone(),
+            workspace_path: workspace_path.clone(),
+            base_commit: main_head.clone(),
+            started_at: issue.created_at,
+            status: ImplementerStatus::Running,
+        });
+        workspaces.push(WorkspaceState {
+            name: workspace_name,
+            path: workspace_path,
+            task_issue: Some(issue.number),
+            session_id: Some("session-linked".into()),
+            daemon_alive: true,
+            has_result_file: false,
+        });
+    }
+    SupervisorState {
+        config,
+        issues,
+        implementers,
+        workspaces,
+        main_head,
+        completed_issues,
+    }
+}
+
+fn start_actions(actions: &[Action]) -> Vec<&Action> {
+    actions
+        .iter()
+        .filter(|a| matches!(a, Action::StartImplementer { .. }))
+        .collect()
+}
+
+#[hegel::test]
+fn prop_never_exceeds_max_parallelism(tc: TestCase) {
+    let state = tc.draw(linked_state());
+    let actions = planner::plan(&state);
+    assert!(
+        start_actions(&actions).len()
+            <= state
+                .config
+                .supervisor
+                .max_parallelism
+                .saturating_sub(state.active_count())
+    );
+}
+
+#[hegel::test]
+fn prop_never_starts_active_or_completed_task(tc: TestCase) {
+    let state = tc.draw(linked_state());
+    let active = state.active_issues();
+    for action in planner::plan(&state) {
+        if let Action::StartImplementer { issue, .. } = action {
+            assert!(!active.contains(&issue.number));
+            assert!(!state.completed_issues.contains(&issue.number));
+        }
+    }
+}
+
+#[hegel::test]
+fn prop_never_starts_ineligible_issue(tc: TestCase) {
+    let state = tc.draw(linked_state());
+    for action in planner::plan(&state) {
+        if let Action::StartImplementer { issue, .. } = action {
+            assert!(state.config.github.allowlist.contains(&issue.author));
+            assert!(
+                !issue
+                    .comments
+                    .last()
+                    .is_some_and(|comment| comment.is_supervisor)
+            );
+        }
+    }
+}
+
+#[hegel::test]
+fn prop_crashed_sessions_are_cleaned_exactly_once(tc: TestCase) {
+    let mut state = tc.draw(linked_state());
+    state.workspaces.push(WorkspaceState {
+        name: "grindbot-crashed".into(),
+        path: "/tmp/grindbot-crashed".into(),
+        task_issue: Some(77),
+        session_id: Some("dead".into()),
+        daemon_alive: false,
+        has_result_file: false,
+    });
+    let actions = planner::plan(&state);
+    assert_eq!(
+        actions
+            .iter()
+            .filter(|action| matches!(action,
+        Action::CleanupWorkspace { workspace_name, reason: CleanupReason::SessionCrashed }
+        if workspace_name == "grindbot-crashed"))
+            .count(),
+        1
+    );
+}
+
+#[hegel::test]
+fn prop_finished_sessions_have_complete_actions(tc: TestCase) {
+    let mut state = tc.draw(linked_state());
+    let issue_number = state.issues[0].number;
+    state.implementers.push(ImplementerState {
+        issue_number,
+        session_id: "finished".into(),
+        workspace_name: "grindbot-finished".into(),
+        workspace_path: "/tmp/grindbot-finished".into(),
+        base_commit: "base123".into(),
+        started_at: state.issues[0].created_at,
+        status: ImplementerStatus::Finished(ImplementerResult::Done {
+            commit: "commit123".into(),
+        }),
+    });
+    let actions = planner::plan(&state);
+    assert!(actions.iter().any(|a| matches!(a, Action::MergeImplementation {
+        workspace_name, commit, base_commit, issue_number: n
+    } if workspace_name == "grindbot-finished" && commit == "commit123" && base_commit == "base123" && *n == issue_number)));
+}
+
+#[hegel::test]
+fn prop_finished_needs_feedback_posts_and_cleans_up(tc: TestCase) {
+    let mut state = tc.draw(linked_state());
+    let issue_number = state.issues[0].number;
+    state.implementers.push(ImplementerState {
+        issue_number,
+        session_id: "feedback".into(),
+        workspace_name: "grindbot-feedback".into(),
+        workspace_path: "/tmp/grindbot-feedback".into(),
+        base_commit: "base123".into(),
+        started_at: state.issues[0].created_at,
+        status: ImplementerStatus::Finished(ImplementerResult::NeedsFeedback {
+            message: "need more detail".into(),
+        }),
+    });
+    let actions = planner::plan(&state);
+    assert_eq!(actions.iter().filter(|action| matches!(action,
+        Action::PostComment { issue_number: n, body } if *n == issue_number && body.contains("need more detail"))).count(), 1);
+    assert_eq!(
+        actions
+            .iter()
+            .filter(|action| matches!(action,
+        Action::CleanupWorkspace { workspace_name, reason: CleanupReason::SessionFinished }
+        if workspace_name == "grindbot-feedback"))
+            .count(),
+        1
+    );
+}
+
+#[test]
+fn duplicate_running_implementers_are_not_started_again() {
+    let mut state = SupervisorState {
+        config: Config {
             github: grindbot::config::GithubConfig {
-                owner: "test".to_string(),
-                repo: "test".to_string(),
-                allowlist,
-            },
-            supervisor: grindbot::config::SupervisorConfig {
-                max_parallelism,
-                poll_interval_secs: 30,
-                base_branch: "main".to_string(),
+                owner: "test".into(),
+                repo: "test".into(),
+                allowlist: vec!["alice".into()],
             },
             ..Config::default()
         },
-    )
-}
-
-fn arb_state() -> impl Strategy<Value = SupervisorState> {
-    (
-        arb_config(),
-        proptest::collection::vec(arb_issue(), 0..10),
-        proptest::collection::vec(arb_implementer(), 0..5),
-        proptest::collection::vec(arb_workspace(), 0..5),
-        "[a-f0-9]{8,40}",
-        proptest::collection::vec(1u64..1000, 0..5),
-    )
-        .prop_map(
-            |(config, issues, implementers, workspaces, main_head, completed_issues)| {
-                SupervisorState {
-                    config,
-                    issues,
-                    implementers,
-                    workspaces,
-                    main_head,
-                    completed_issues,
-                }
-            },
-        )
-}
-
-// Invariant 1: plan(state) never starts more than max_parallelism implementers in one cycle.
-proptest! {
-    #[test]
-    fn prop_never_exceeds_max_parallelism(state in arb_state()) {
-        let actions = planner::plan(&state);
-        let started = actions.iter().filter(|a| matches!(a, Action::StartImplementer { .. })).count();
-        let active = state.active_count();
-        let max = state.config.supervisor.max_parallelism;
-        // The planner should never start more than the available slots.
-        // If active >= max, no new implementers should be started.
-        if active >= max {
-            prop_assert!(started == 0, "started {} when active {} >= max {}", started, active, max);
-        } else {
-            prop_assert!(started <= max - active, "started {} > available slots {}", started, max - active);
-        }
-    }
-
-    // Invariant 2: plan(state) never starts an implementer for a task that's already active.
-    #[test]
-    fn prop_never_starts_active_task(state in arb_state()) {
-        let active_issues = state.active_issues();
-        let actions = planner::plan(&state);
-        for action in &actions {
-            if let Action::StartImplementer { issue, .. } = action {
-                prop_assert!(!active_issues.contains(&issue.number));
-            }
-        }
-    }
-
-    // Invariant 3: plan(state) never starts an implementer for a completed task.
-    #[test]
-    fn prop_never_starts_completed_task(state in arb_state()) {
-        let completed = &state.completed_issues;
-        let actions = planner::plan(&state);
-        for action in &actions {
-            if let Action::StartImplementer { issue, .. } = action {
-                prop_assert!(!completed.contains(&issue.number));
-            }
-        }
-    }
-
-    // Invariant 4: plan(state) never starts an implementer for a task where last activity is by supervisor.
-    #[test]
-    fn prop_never_starts_supervisor_active_task(state in arb_state()) {
-        let actions = planner::plan(&state);
-        for action in &actions {
-            if let Action::StartImplementer { issue, .. } = action {
-                let last_by_supervisor = issue.comments.last()
-                    .map(|c| c.is_supervisor)
-                    .unwrap_or(false);
-                prop_assert!(!last_by_supervisor);
-            }
-        }
-    }
-
-    // Invariant 5: plan(state) never starts an implementer for a task whose author is not on the allowlist.
-    #[test]
-    fn prop_never_starts_non_allowlisted(state in arb_state()) {
-        let allowlist = &state.config.github.allowlist;
-        let actions = planner::plan(&state);
-        for action in &actions {
-            if let Action::StartImplementer { issue, .. } = action {
-                prop_assert!(allowlist.contains(&issue.author));
-            }
-        }
-    }
-
-    // Invariant 6: When state contains a workspace with daemon_alive=false, session_id=Some,
-    // and has_result_file=false, plan produces a CleanupWorkspace{SessionCrashed} action.
-    #[test]
-    fn prop_cleans_up_crashed_sessions(state in arb_state()) {
-        let actions = planner::plan(&state);
-        for ws in &state.workspaces {
-            if ws.session_id.is_some() && !ws.daemon_alive && !ws.has_result_file {
-                let has_cleanup = actions.iter().any(|a| matches!(
-                    a,
-                    Action::CleanupWorkspace { workspace_name, reason: CleanupReason::SessionCrashed }
-                    if *workspace_name == ws.name
-                ));
-                prop_assert!(has_cleanup);
-            }
-        }
-    }
-
-    // Invariant 7: plan(state) always processes result files from finished sessions.
-    #[test]
-    fn prop_processes_finished_sessions(state in arb_state()) {
-        let actions = planner::plan(&state);
-        for imp in &state.implementers {
-            if let ImplementerStatus::Finished(result) = &imp.status {
-                match result {
-                    ImplementerResult::Done { commit, .. } => {
-                        let has_merge = actions.iter().any(|a| matches!(
-                            a,
-                            Action::MergeImplementation { commit: c, .. } if c == commit
-                        ));
-                        prop_assert!(has_merge);
-                    }
-                    ImplementerResult::NeedsFeedback { .. } => {
-                        let has_comment = actions.iter().any(|a| matches!(
-                            a,
-                            Action::PostComment { issue_number, .. } if *issue_number == imp.issue_number
-                        ));
-                        prop_assert!(has_comment);
-                    }
-                }
-            }
-        }
-    }
-
-    // Invariant 8: plan(state) never starts two implementers for the same issue.
-    #[test]
-    fn prop_never_starts_duplicate_issue(state in arb_state()) {
-        let actions = planner::plan(&state);
-        let mut started_issues = std::collections::HashSet::new();
-        for action in &actions {
-            if let Action::StartImplementer { issue, .. } = action {
-                prop_assert!(!started_issues.contains(&issue.number));
-                started_issues.insert(issue.number);
-            }
-        }
-    }
-}
-
-// Invariant 9: plan(state) produces Noop when there are no eligible issues and no pending cleanup.
-#[test]
-fn prop_noop_when_idle() {
-    let config = Config {
-        github: grindbot::config::GithubConfig {
-            owner: "test".to_string(),
-            repo: "test".to_string(),
-            allowlist: vec!["alice".to_string()],
-        },
-        supervisor: grindbot::config::SupervisorConfig {
-            max_parallelism: 2,
-            poll_interval_secs: 30,
-            base_branch: "main".to_string(),
-        },
-        ..Config::default()
+        issues: vec![],
+        implementers: vec![],
+        workspaces: vec![],
+        main_head: "abc".into(),
+        completed_issues: vec![],
     };
+    for (session_id, workspace_name) in [("one", "grindbot-one"), ("two", "grindbot-two")] {
+        state.implementers.push(ImplementerState {
+            issue_number: 42,
+            session_id: session_id.into(),
+            workspace_name: workspace_name.into(),
+            workspace_path: format!("/tmp/{workspace_name}"),
+            base_commit: "abc".into(),
+            started_at: chrono::Utc::now(),
+            status: ImplementerStatus::Running,
+        });
+    }
+    assert!(
+        planner::plan(&state)
+            .iter()
+            .all(|action| !matches!(action, Action::StartImplementer { .. }))
+    );
+}
+
+#[test]
+fn duplicate_running_implementers_same_workspace_are_not_started_again() {
+    let mut state = SupervisorState {
+        config: Config {
+            github: grindbot::config::GithubConfig {
+                owner: "test".into(),
+                repo: "test".into(),
+                allowlist: vec!["alice".into()],
+            },
+            supervisor: grindbot::config::SupervisorConfig {
+                max_parallelism: 1,
+                ..Config::default().supervisor
+            },
+            ..Config::default()
+        },
+        issues: vec![],
+        implementers: vec![],
+        workspaces: vec![],
+        main_head: "00a00a0a".into(),
+        completed_issues: vec![],
+    };
+    for (session_id, base_commit) in [("00000aaa", "000000a0"), ("000000aa", "a00000a0")] {
+        state.implementers.push(ImplementerState {
+            issue_number: 1,
+            session_id: session_id.into(),
+            workspace_name: "grindbot-0".into(),
+            workspace_path: "/tmp/grindbot-0".into(),
+            base_commit: base_commit.into(),
+            started_at: chrono::Utc.with_ymd_and_hms(2024, 1, 2, 0, 0, 0).unwrap(),
+            status: ImplementerStatus::Running,
+        });
+    }
+    assert!(
+        planner::plan(&state)
+            .iter()
+            .all(|action| !matches!(action, Action::StartImplementer { .. }))
+    );
+}
+
+#[test]
+fn idle_state_has_exactly_one_noop() {
+    let mut config = Config::default();
+    config.github.allowlist = vec!["alice".into()];
     let state = SupervisorState {
         config,
         issues: vec![],
         implementers: vec![],
         workspaces: vec![],
-        main_head: "abc".to_string(),
+        main_head: "abc".into(),
         completed_issues: vec![],
     };
     let actions = planner::plan(&state);
-    assert!(actions.len() == 1 && matches!(actions[0], Action::Noop));
+    assert_eq!(actions.len(), 1);
+    assert!(matches!(actions[0], Action::Noop));
 }

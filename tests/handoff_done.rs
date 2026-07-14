@@ -7,27 +7,51 @@ use grindbot::core::state::HandoffResult;
 use std::path::Path;
 
 fn create_jj_repo(dir: &Path) -> String {
-    // Initialize a jj repo
-    std::process::Command::new("jj")
+    // These tests exercise real jj behavior. Skip only when jj is unavailable;
+    // command failures in an environment with jj installed must fail the test.
+    if std::process::Command::new("jj")
+        .arg("--version")
+        .status()
+        .is_err()
+    {
+        eprintln!("skipping handoff test: jj is not installed");
+        return String::new();
+    }
+    let init = std::process::Command::new("jj")
         .args(["git", "init", "--colocate"])
         .current_dir(dir)
         .output()
-        .expect("jj git init failed");
+        .expect("jj git init could not be started");
+    assert!(
+        init.status.success(),
+        "jj git init failed: {}",
+        String::from_utf8_lossy(&init.stderr)
+    );
 
     // Create a file and commit
     std::fs::write(dir.join("test.txt"), "hello").unwrap();
-    std::process::Command::new("jj")
+    let new = std::process::Command::new("jj")
         .args(["new"])
         .current_dir(dir)
         .output()
-        .expect("jj new failed");
+        .expect("jj new could not be started");
+    assert!(
+        new.status.success(),
+        "jj new failed: {}",
+        String::from_utf8_lossy(&new.stderr)
+    );
 
     // Get the current commit hash
     let output = std::process::Command::new("jj")
         .args(["log", "-r", "@", "--no-graph", "-T", "commit_id"])
         .current_dir(dir)
         .output()
-        .expect("jj log failed");
+        .expect("jj log could not be started");
+    assert!(
+        output.status.success(),
+        "jj log failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 
     String::from_utf8_lossy(&output.stdout).trim().to_string()
 }
@@ -37,7 +61,12 @@ fn get_base_commit(dir: &Path) -> String {
         .args(["log", "-r", "root()", "--no-graph", "-T", "commit_id"])
         .current_dir(dir)
         .output()
-        .expect("jj log root failed");
+        .expect("jj log root could not be started");
+    assert!(
+        output.status.success(),
+        "jj log root failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 
     String::from_utf8_lossy(&output.stdout).trim().to_string()
 }
@@ -46,6 +75,9 @@ fn get_base_commit(dir: &Path) -> String {
 fn test_handoff_done_writes_result_file() {
     let dir = tempfile::tempdir().unwrap();
     let commit = create_jj_repo(dir.path());
+    if commit.is_empty() {
+        return;
+    }
     let base = get_base_commit(dir.path());
 
     // Create .grindbot/base_commit
@@ -84,7 +116,10 @@ fn test_handoff_done_writes_result_file() {
 #[test]
 fn test_handoff_done_invalid_commit_fails() {
     let dir = tempfile::tempdir().unwrap();
-    let _ = create_jj_repo(dir.path());
+    let commit = create_jj_repo(dir.path());
+    if commit.is_empty() {
+        return;
+    }
     let base = get_base_commit(dir.path());
 
     let grindbot_dir = dir.path().join(".grindbot");
@@ -107,7 +142,10 @@ fn test_handoff_done_invalid_commit_fails() {
 #[test]
 fn test_handoff_needs_feedback_writes_result_file() {
     let dir = tempfile::tempdir().unwrap();
-    let _ = create_jj_repo(dir.path());
+    let commit = create_jj_repo(dir.path());
+    if commit.is_empty() {
+        return;
+    }
 
     let grindbot_dir = dir.path().join(".grindbot");
     std::fs::create_dir_all(&grindbot_dir).unwrap();

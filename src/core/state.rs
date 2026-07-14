@@ -88,13 +88,7 @@ impl SupervisorState {
 #[serde(tag = "status")]
 pub enum HandoffResult {
     #[serde(rename = "done")]
-    Done {
-        commit: String,
-        timestamp: String,
-    },
+    Done { commit: String, timestamp: String },
     #[serde(rename = "needs-feedback")]
-    NeedsFeedback {
-        message: String,
-        timestamp: String,
-    },
+    NeedsFeedback { message: String, timestamp: String },
 }

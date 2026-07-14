@@ -37,22 +37,9 @@ impl JjClient for RealJjClient {
         Ok(())
     }
 
-    async fn create_workspace(
-        &self,
-        dest: &str,
-        name: &str,
-        base_rev: &str,
-    ) -> anyhow::Result<()> {
+    async fn create_workspace(&self, dest: &str, name: &str, base_rev: &str) -> anyhow::Result<()> {
         let output = tokio::process::Command::new("jj")
-            .args([
-                "workspace",
-                "add",
-                dest,
-                "--name",
-                name,
-                "-r",
-                base_rev,
-            ])
+            .args(["workspace", "add", dest, "--name", name, "-r", base_rev])
             .output()
             .await?;
         if !output.status.success() {
@@ -145,10 +132,7 @@ impl JjClient for RealJjClient {
             .run_jj(&["log", "-r", revset, "--no-graph", "-T", template])
             .await?;
         if !output.status.success() {
-            anyhow::bail!(
-                "jj log failed: {}",
-                String::from_utf8_lossy(&output.stderr)
-            );
+            anyhow::bail!("jj log failed: {}", String::from_utf8_lossy(&output.stderr));
         }
 
         let text = String::from_utf8_lossy(&output.stdout);
@@ -181,13 +165,9 @@ impl JjClient for RealJjClient {
                     String::from_utf8_lossy(&output.stderr)
                 );
             }
-            return Ok(String::from_utf8_lossy(&output.stdout)
-                .trim()
-                .to_string());
+            return Ok(String::from_utf8_lossy(&output.stdout).trim().to_string());
         }
-        Ok(String::from_utf8_lossy(&output.stdout)
-            .trim()
-            .to_string())
+        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
     }
 
     async fn push(&self, remote: &str, branch: &str) -> anyhow::Result<()> {
@@ -207,7 +187,9 @@ impl JjClient for RealJjClient {
     }
 
     async fn has_conflicts(&self) -> anyhow::Result<bool> {
-        let output = self.run_jj(&["log", "-r", "conflicted", "--no-graph"]).await?;
+        let output = self
+            .run_jj(&["log", "-r", "conflicted", "--no-graph"])
+            .await?;
         // If there are conflicted revisions, stdout will be non-empty
         Ok(!String::from_utf8_lossy(&output.stdout).trim().is_empty())
     }

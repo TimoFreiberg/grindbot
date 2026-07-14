@@ -6,15 +6,12 @@
 
 mod common;
 
-
 use grindbot::config::Config;
 use grindbot::io::{Filesystem, GithubClient, JjClient, PolytokenClient, RebaseResult};
 use grindbot::state_file::{ActiveImplementer, StateFile};
 use grindbot::workspace;
 
-use common::{
-    MockFilesystem, MockGithubClient, MockJjClient, MockPolytokenClient,
-};
+use common::{MockFilesystem, MockGithubClient, MockJjClient, MockPolytokenClient};
 
 fn make_config() -> Config {
     Config {
@@ -51,7 +48,10 @@ async fn test_session_startup_sequence() {
 
     // Configure session
     polytoken.set_facet(&session, "plan").await.unwrap();
-    polytoken.enable_adventurous_handoff(&session).await.unwrap();
+    polytoken
+        .enable_adventurous_handoff(&session)
+        .await
+        .unwrap();
     polytoken
         .set_permission_mode(&session, "bypass_plus")
         .await
@@ -67,10 +67,7 @@ async fn test_session_startup_sequence() {
 
     // Verify all calls were made
     assert_eq!(polytoken.spawned_sessions.lock().unwrap().len(), 1);
-    assert_eq!(
-        polytoken.facet_calls.lock().unwrap()[0].1,
-        "plan"
-    );
+    assert_eq!(polytoken.facet_calls.lock().unwrap()[0].1, "plan");
     assert_eq!(polytoken.handoff_calls.lock().unwrap().len(), 1);
     assert_eq!(
         polytoken.permission_calls.lock().unwrap()[0].1,
@@ -83,44 +80,53 @@ async fn test_session_startup_sequence() {
 // AC.12: Merge flow rebases, moves bookmark, pushes
 #[tokio::test]
 async fn test_merge_flow_success() {
-    let _config = make_config();
+    let config = make_config();
     let jj = MockJjClient::new();
     let github = MockGithubClient::new();
-
-    // Simulate a successful rebase
+    let fs = MockFilesystem::new();
+    let polytoken = MockPolytokenClient::new();
     jj.set_rebase_result(RebaseResult::Success);
-
-    // Simulate the merge flow
-    let commit = "newcommit123";
-    let base_commit = "basecommit456";
-
-    // Rebase
-    let revset = format!("{}::{}", base_commit, commit);
-    let result = jj.rebase(&revset, "main@origin").await.unwrap();
-    assert!(matches!(result, RebaseResult::Success));
-
-    // Move bookmark
-    jj.set_bookmark("main", commit).await.unwrap();
-
-    // Push
-    jj.push("origin", "main").await.unwrap();
-
-    // Post comment
-    let comment_body = format!(
-        "<!-- grindbot -->\n\nImplementation complete. Commit `{}` has been merged to `{}`.",
-        commit, "main"
+    let github = std::sync::Arc::new(github);
+    let jj = std::sync::Arc::new(jj);
+    let io = grindbot::io::IoLayer {
+        github: github.clone(),
+        jj: jj.clone(),
+        polytoken: std::sync::Arc::new(polytoken),
+        fs: std::sync::Arc::new(fs),
+    };
+    let mut state = StateFile::default();
+    state.add_implementer(ActiveImplementer {
+        issue_number: 42,
+        session_id: "session".into(),
+        workspace_name: "grindbot-42".into(),
+        workspace_path: "/tmp/grindbot-42".into(),
+        base_commit: "basecommit456".into(),
+        started_at: "2024-01-01T00:00:00Z".into(),
+    });
+    grindbot::supervisor::merge_implementation(
+        &config,
+        &io,
+        &mut state,
+        "grindbot-42",
+        "newcommit123",
+        "basecommit456",
+        42,
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        jj.rebase_calls.lock().unwrap()[0],
+        ("basecommit456::newcommit123".into(), "main@origin".into())
     );
-    github
-        .post_comment("test", "test", 42, &comment_body)
-        .await
-        .unwrap();
-
-    // Verify calls
-    assert_eq!(jj.rebase_calls.lock().unwrap().len(), 1);
-    assert_eq!(jj.bookmark_calls.lock().unwrap()[0].1, commit);
+    assert_eq!(jj.bookmark_calls.lock().unwrap()[0].1, "newcommit123");
     assert_eq!(jj.push_calls.lock().unwrap().len(), 1);
     assert_eq!(github.posted_comments.lock().unwrap().len(), 1);
-    assert!(github.posted_comments.lock().unwrap()[0].1.contains("<!-- grindbot -->"));
+    assert!(
+        state
+            .completed_tasks
+            .iter()
+            .any(|task| task.issue_number == 42 && task.commit == "newcommit123")
+    );
 }
 
 // AC.12: Merge flow with conflict
@@ -143,7 +149,8 @@ async fn test_merge_flow_conflict() {
 async fn test_comment_format_done() {
     let github = MockGithubClient::new();
 
-    let body = "<!-- grindbot -->\n\nImplementation complete. Commit `abc` has been merged to `main`.";
+    let body =
+        "<!-- grindbot -->\n\nImplementation complete. Commit `abc` has been merged to `main`.";
     github.post_comment("test", "test", 42, body).await.unwrap();
 
     let comments = github.posted_comments.lock().unwrap();
@@ -175,7 +182,9 @@ async fn test_crashed_session_cleanup() {
     // Create a workspace with a dead session
     let workspace_name = "grindbot-42";
     let workspace_path = "/tmp/test-repo/.grindbot-workspaces/grindbot-42";
-    jj.create_workspace(workspace_path, workspace_name, "base").await.unwrap();
+    jj.create_workspace(workspace_path, workspace_name, "base")
+        .await
+        .unwrap();
 
     // The session is not alive (not registered in alive_sessions)
     let session_info = grindbot::io::SessionInfo {
@@ -194,7 +203,12 @@ async fn test_crashed_session_cleanup() {
     fs.remove_dir_all(workspace_path).unwrap();
 
     // Verify workspace was forgotten
-    assert!(jj.forgotten.lock().unwrap().contains(&workspace_name.to_string()));
+    assert!(
+        jj.forgotten
+            .lock()
+            .unwrap()
+            .contains(&workspace_name.to_string())
+    );
 }
 
 // AC.12b: Conflict resolution agent configuration
@@ -204,7 +218,8 @@ async fn test_conflict_resolution_agent_config() {
     let fs = MockFilesystem::new();
 
     let workspace_path = "/tmp/test-ws";
-    fs.create_dir_all(&format!("{}/.polytoken", workspace_path)).unwrap();
+    fs.create_dir_all(&format!("{}/.polytoken", workspace_path))
+        .unwrap();
 
     // Set up conflict resolution workspace
     workspace::setup_conflict_resolution_workspace(workspace_path, &fs).unwrap();
@@ -214,8 +229,14 @@ async fn test_conflict_resolution_agent_config() {
 
     // Configure for conflict resolution
     polytoken.set_facet(&session, "execute").await.unwrap();
-    polytoken.set_permission_mode(&session, "bypass_plus").await.unwrap();
-    polytoken.set_goal(&session, "Resolve merge conflicts in workspace").await.unwrap();
+    polytoken
+        .set_permission_mode(&session, "bypass_plus")
+        .await
+        .unwrap();
+    polytoken
+        .set_goal(&session, "Resolve merge conflicts in workspace")
+        .await
+        .unwrap();
     polytoken
         .send_prompt(
             &session,
@@ -227,8 +248,15 @@ async fn test_conflict_resolution_agent_config() {
 
     // Verify configuration
     assert_eq!(polytoken.facet_calls.lock().unwrap()[0].1, "execute");
-    assert_eq!(polytoken.permission_calls.lock().unwrap()[0].1, "bypass_plus");
-    assert!(polytoken.goal_calls.lock().unwrap()[0].1.contains("conflict"));
+    assert_eq!(
+        polytoken.permission_calls.lock().unwrap()[0].1,
+        "bypass_plus"
+    );
+    assert!(
+        polytoken.goal_calls.lock().unwrap()[0]
+            .1
+            .contains("conflict")
+    );
     assert_eq!(polytoken.prompt_calls.lock().unwrap()[0].2, 50);
 
     // Verify the always-stop hook was written

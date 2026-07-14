@@ -131,12 +131,7 @@ impl JjClient for MockJjClient {
         Ok(())
     }
 
-    async fn create_workspace(
-        &self,
-        dest: &str,
-        name: &str,
-        base_rev: &str,
-    ) -> anyhow::Result<()> {
+    async fn create_workspace(&self, dest: &str, name: &str, base_rev: &str) -> anyhow::Result<()> {
         self.created_workspaces.lock().unwrap().push((
             dest.to_string(),
             name.to_string(),

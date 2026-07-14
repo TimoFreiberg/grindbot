@@ -8,11 +8,7 @@ use crate::core::state::{Comment, Issue};
 pub const PROMPT_TEMPLATE: &str = include_str!("prompts/implementer.md");
 
 /// Build the prompt for an implementer session.
-pub fn build_prompt(
-    issue: &Issue,
-    github_url: &str,
-    grindbot_path: &str,
-) -> String {
+pub fn build_prompt(issue: &Issue, github_url: &str, grindbot_path: &str) -> String {
     let recent_comments_section = if issue.comments.is_empty() {
         String::new()
     } else {
@@ -122,7 +118,8 @@ pub fn hooks_json(stop_hook_script: &str) -> String {
 
 /// The hooks.json content for the always-stop hook (conflict resolution agents).
 pub fn hooks_json_always_stop() -> String {
-    let escaped = serde_json::to_string(STOP_HOOK_ALWAYS_STOP).unwrap_or_else(|_| "\"\"".to_string());
+    let escaped =
+        serde_json::to_string(STOP_HOOK_ALWAYS_STOP).unwrap_or_else(|_| "\"\"".to_string());
     format!(
         r#"[
   {{

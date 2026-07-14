@@ -46,7 +46,9 @@ fn test_workspace_setup_creates_all_files() {
     assert!(perms.contains(".polytoken"));
 
     // Check gitignore
-    let gitignore = fs.read_to_string(&format!("{}/.gitignore", repo_path)).unwrap();
+    let gitignore = fs
+        .read_to_string(&format!("{}/.gitignore", repo_path))
+        .unwrap();
     assert!(gitignore.contains(".grindbot-workspaces"));
 }
 
@@ -90,7 +92,8 @@ fn test_conflict_resolution_workspace_setup() {
     let workspace_path = "/tmp/test-ws";
 
     // Pre-create the polytoken dir
-    fs.create_dir_all(&format!("{}/.polytoken", workspace_path)).unwrap();
+    fs.create_dir_all(&format!("{}/.polytoken", workspace_path))
+        .unwrap();
 
     grindbot::workspace::setup_conflict_resolution_workspace(workspace_path, &fs).unwrap();
 

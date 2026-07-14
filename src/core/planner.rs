@@ -295,7 +295,10 @@ mod tests {
         let actions = plan(&state);
         assert!(actions.iter().any(|a| matches!(
             a,
-            Action::CleanupWorkspace { reason: CleanupReason::SessionCrashed, .. }
+            Action::CleanupWorkspace {
+                reason: CleanupReason::SessionCrashed,
+                ..
+            }
         )));
     }
 
@@ -314,7 +317,10 @@ mod tests {
         let actions = plan(&state);
         assert!(actions.iter().any(|a| matches!(
             a,
-            Action::CleanupWorkspace { reason: CleanupReason::OrphanedWorkspace, .. }
+            Action::CleanupWorkspace {
+                reason: CleanupReason::OrphanedWorkspace,
+                ..
+            }
         )));
     }
 
@@ -358,11 +364,17 @@ mod tests {
         let actions = plan(&state);
         assert!(actions.iter().any(|a| matches!(
             a,
-            Action::PostComment { issue_number: 1, .. }
+            Action::PostComment {
+                issue_number: 1,
+                ..
+            }
         )));
         assert!(actions.iter().any(|a| matches!(
             a,
-            Action::CleanupWorkspace { reason: CleanupReason::SessionFinished, .. }
+            Action::CleanupWorkspace {
+                reason: CleanupReason::SessionFinished,
+                ..
+            }
         )));
     }
 

@@ -125,7 +125,7 @@ fn build_io_layer(config: &Config) -> IoLayer {
 }
 
 /// Gather the current state from all I/O sources.
-async fn gather_state(
+pub async fn gather_state(
     config: &Config,
     io: &IoLayer,
     state_file: &StateFile,
@@ -256,7 +256,7 @@ async fn gather_state(
 }
 
 /// Startup cleanup: reconcile workspaces and state file.
-async fn startup_cleanup(
+pub async fn startup_cleanup(
     config: &Config,
     io: &IoLayer,
     state_file: &mut StateFile,
@@ -303,8 +303,13 @@ async fn startup_cleanup(
                     }
                 }
                 // Clean up
-                cleanup_workspace_action(config, io, &active.workspace_name, &active.workspace_path)
-                    .await?;
+                cleanup_workspace_action(
+                    config,
+                    io,
+                    &active.workspace_name,
+                    &active.workspace_path,
+                )
+                .await?;
                 state_file.remove_implementer(&active.workspace_name);
             }
         } else {
@@ -326,7 +331,7 @@ async fn startup_cleanup(
 }
 
 /// Execute a single action.
-async fn execute_action(
+pub async fn execute_action(
     action: &Action,
     config: &Config,
     io: &IoLayer,
@@ -451,11 +456,7 @@ async fn execute_action(
             }
         }
         Action::PushToRemote => {
-            if let Err(e) = io
-                .jj
-                .push("origin", &config.supervisor.base_branch)
-                .await
-            {
+            if let Err(e) = io.jj.push("origin", &config.supervisor.base_branch).await {
                 tracing::error!("failed to push to remote: {}", e);
             }
         }
@@ -464,7 +465,7 @@ async fn execute_action(
 }
 
 /// Start a new implementer session.
-async fn start_implementer(
+pub async fn start_implementer(
     config: &Config,
     io: &IoLayer,
     state_file: &mut StateFile,
@@ -485,7 +486,13 @@ async fn start_implementer(
         .await?;
 
     // 2. Set up workspace files (.grindbot, .polytoken)
-    workspace::setup_workspace(config, &repo_path, issue.number, base_commit, io.fs.as_ref())?;
+    workspace::setup_workspace(
+        config,
+        &repo_path,
+        issue.number,
+        base_commit,
+        io.fs.as_ref(),
+    )?;
 
     // 3. Spawn Polytoken session
     let session_info = io.polytoken.spawn_session(&workspace_path).await?;
@@ -512,7 +519,11 @@ async fn start_implementer(
     );
     let prompt_content = prompt::build_prompt(issue, &github_url, &grindbot_path);
     io.polytoken
-        .send_prompt(&session_info, &prompt_content, config.polytoken.max_tool_turns)
+        .send_prompt(
+            &session_info,
+            &prompt_content,
+            config.polytoken.max_tool_turns,
+        )
         .await?;
 
     // 6. Record in state file
@@ -538,7 +549,7 @@ async fn start_implementer(
 }
 
 /// Merge an implementation: rebase, move bookmark, push, post comment.
-async fn merge_implementation(
+pub async fn merge_implementation(
     config: &Config,
     io: &IoLayer,
     state_file: &mut StateFile,
@@ -560,15 +571,12 @@ async fn merge_implementation(
                 .await?;
 
             // Push to remote
-            io.jj
-                .push("origin", &config.supervisor.base_branch)
-                .await?;
+            io.jj.push("origin", &config.supervisor.base_branch).await?;
 
             // Post comment on the issue
             let comment_body = format!(
                 "<!-- grindbot -->\n\nImplementation complete. Commit `{}` has been merged to `{}`.",
-                commit,
-                config.supervisor.base_branch
+                commit, config.supervisor.base_branch
             );
             io.github
                 .post_comment(
@@ -606,8 +614,16 @@ async fn merge_implementation(
                 conflicted_files
             );
             // Spawn conflict resolution agent
-            resolve_conflict(config, io, state_file, workspace_name, commit, base_commit, issue_number)
-                .await?;
+            resolve_conflict(
+                config,
+                io,
+                state_file,
+                workspace_name,
+                commit,
+                base_commit,
+                issue_number,
+            )
+            .await?;
         }
     }
 
@@ -615,7 +631,7 @@ async fn merge_implementation(
 }
 
 /// Resolve merge conflicts by spawning a one-shot Polytoken agent.
-async fn resolve_conflict(
+pub async fn resolve_conflict(
     config: &Config,
     io: &IoLayer,
     state_file: &mut StateFile,
@@ -678,7 +694,10 @@ async fn resolve_conflict(
 
     loop {
         if start.elapsed() > timeout {
-            tracing::warn!("conflict resolution agent timed out for issue #{}", issue_number);
+            tracing::warn!(
+                "conflict resolution agent timed out for issue #{}",
+                issue_number
+            );
             let _ = io.polytoken.terminate(&session_info).await;
             // Increment retry count
             state_file.increment_conflict_retry(issue_number);
@@ -737,14 +756,11 @@ async fn resolve_conflict(
             io.jj
                 .set_bookmark(&config.supervisor.base_branch, commit)
                 .await?;
-            io.jj
-                .push("origin", &config.supervisor.base_branch)
-                .await?;
+            io.jj.push("origin", &config.supervisor.base_branch).await?;
 
             let comment_body = format!(
                 "<!-- grindbot -->\n\nImplementation complete (after conflict resolution). Commit `{}` has been merged to `{}`.",
-                commit,
-                config.supervisor.base_branch
+                commit, config.supervisor.base_branch
             );
             io.github
                 .post_comment(
@@ -765,7 +781,10 @@ async fn resolve_conflict(
             cleanup_workspace_action(config, io, workspace_name, &ws_path).await?;
             state_file.remove_implementer(workspace_name);
 
-            tracing::info!("merged implementation for issue #{} (after conflict resolution)", issue_number);
+            tracing::info!(
+                "merged implementation for issue #{} (after conflict resolution)",
+                issue_number
+            );
         }
         RebaseResult::Conflict { .. } => {
             tracing::warn!(
@@ -782,7 +801,7 @@ async fn resolve_conflict(
 }
 
 /// Process a result file from a finished session.
-async fn process_result(
+pub async fn process_result(
     config: &Config,
     io: &IoLayer,
     state_file: &mut StateFile,
@@ -806,10 +825,7 @@ async fn process_result(
             .await?;
         }
         HandoffResult::NeedsFeedback { message, .. } => {
-            let comment_body = format!(
-                "<!-- grindbot -->\n\n**Needs feedback:**\n\n{}",
-                message
-            );
+            let comment_body = format!("<!-- grindbot -->\n\n**Needs feedback:**\n\n{}", message);
             io.github
                 .post_comment(
                     &config.github.owner,
@@ -833,7 +849,7 @@ async fn process_result(
 }
 
 /// Clean up a workspace: forget in jj and remove directory.
-async fn cleanup_workspace_action(
+pub async fn cleanup_workspace_action(
     _config: &Config,
     io: &IoLayer,
     workspace_name: &str,
