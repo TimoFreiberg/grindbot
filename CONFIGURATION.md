@@ -18,6 +18,7 @@ Paths resolve from the current working directory. Config is loaded once at start
 [github]
 owner = "your-org"
 repo = "your-repo"
+# GitHub usernames whose issues may be implemented (not email addresses)
 allowlist = ["alice", "bob"]
 
 [supervisor]

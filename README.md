@@ -16,6 +16,7 @@ Create a `grindbot.toml` in your repo root (see `config.example.toml`):
 [github]
 owner = "your-org"
 repo = "your-repo"
+# GitHub usernames whose issues may be implemented (not email addresses)
 allowlist = ["alice", "bob"]
 
 [supervisor]
