@@ -67,20 +67,74 @@ fn test_readme_contains_documentation() {
 
 #[test]
 fn test_agent_prompt_documentation_includes_source_files() {
-    let documentation = include_str!("../AGENT_PROMPTS.md");
+    let documentation_path =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("AGENT_PROMPTS.md");
+    let documentation = std::fs::read_to_string(&documentation_path)
+        .expect("AGENT_PROMPTS.md should be readable from the repository");
     let implementer = include_str!("../src/prompts/implementer.md");
     let conflict_resolution = include_str!("../src/prompts/conflict_resolution.md");
 
-    assert!(
-        documentation.contains(implementer),
+    let mut synchronized = documentation.clone();
+    replace_generated_prompt(&mut synchronized, "IMPLEMENTER", implementer);
+    replace_generated_prompt(
+        &mut synchronized,
+        "CONFLICT RESOLUTION",
+        conflict_resolution,
+    );
+
+    if synchronized != documentation {
+        std::fs::write(&documentation_path, synchronized)
+            .expect("AGENT_PROMPTS.md should be writable when prompt documentation drifts");
+        panic!(
+            "AGENT_PROMPTS.md was out of sync and the working change was updated to make the markdown file match the prompt file; commit that change and run this test again"
+        );
+    }
+
+    assert_eq!(
+        generated_prompt(&documentation, "IMPLEMENTER"),
+        implementer.trim_end_matches('\n'),
         "AGENT_PROMPTS.md must include the complete implementer prompt"
     );
-    assert!(
-        documentation.contains(conflict_resolution),
+    assert_eq!(
+        generated_prompt(&documentation, "CONFLICT RESOLUTION"),
+        conflict_resolution.trim_end_matches('\n'),
         "AGENT_PROMPTS.md must include the complete conflict-resolution prompt"
     );
     assert!(
         !documentation.contains("<polytoken-ref"),
         "AGENT_PROMPTS.md should use GitHub-compatible Markdown"
+    );
+}
+
+fn generated_prompt<'a>(documentation: &'a str, name: &str) -> &'a str {
+    let begin_marker = format!("<!-- BEGIN GENERATED {name} PROMPT -->");
+    let end_marker = format!("<!-- END GENERATED {name} PROMPT -->");
+    let content_start = documentation
+        .find(&begin_marker)
+        .unwrap_or_else(|| panic!("AGENT_PROMPTS.md is missing marker: {begin_marker}"))
+        + begin_marker.len();
+    let content_end = documentation[content_start..]
+        .find(&end_marker)
+        .map(|offset| content_start + offset)
+        .unwrap_or_else(|| panic!("AGENT_PROMPTS.md is missing marker: {end_marker}"));
+
+    documentation[content_start..content_end].trim()
+}
+
+fn replace_generated_prompt(documentation: &mut String, name: &str, prompt: &str) {
+    let begin_marker = format!("<!-- BEGIN GENERATED {name} PROMPT -->");
+    let end_marker = format!("<!-- END GENERATED {name} PROMPT -->");
+    let content_start = documentation
+        .find(&begin_marker)
+        .unwrap_or_else(|| panic!("AGENT_PROMPTS.md is missing marker: {begin_marker}"))
+        + begin_marker.len();
+    let content_end = documentation[content_start..]
+        .find(&end_marker)
+        .map(|offset| content_start + offset)
+        .unwrap_or_else(|| panic!("AGENT_PROMPTS.md is missing marker: {end_marker}"));
+
+    documentation.replace_range(
+        content_start..content_end,
+        &format!("\n{}\n", prompt.trim_end_matches('\n')),
     );
 }

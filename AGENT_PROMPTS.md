@@ -27,6 +27,7 @@ with `include_str!` and substituted by `build_prompt()` in `src/prompt.rs`.
 Placeholders are shown literally as `{name}`.
 
 ```markdown
+<!-- BEGIN GENERATED IMPLEMENTER PROMPT -->
 You are implementing GitHub issue #{number}: {title}
 
 Issue URL: {url}
@@ -89,6 +90,7 @@ make a decision without reading the codebase.
 - Your session will not end until you do.
 - After 3 failed attempts to end without calling handoff, the session will
   be terminated and treated as a crash.
+<!-- END GENERATED IMPLEMENTER PROMPT -->
 ```
 
 
@@ -130,7 +132,9 @@ conflict resolution agent. The prompt is the file
 placeholders** — it is sent verbatim.
 
 ```text
+<!-- BEGIN GENERATED CONFLICT RESOLUTION PROMPT -->
 Resolve the merge conflicts in this workspace. Use the jj-resolve-conflicts skill. Do not make any changes beyond what is needed to resolve the conflicts.
+<!-- END GENERATED CONFLICT RESOLUTION PROMPT -->
 ```
 
 ### Conflict resolution session configuration
