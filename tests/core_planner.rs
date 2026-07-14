@@ -1,6 +1,5 @@
 //! Property-based tests for the core planner (invariants 1-9).
 
-use chrono::TimeZone;
 use grindbot::config::Config;
 use grindbot::core::actions::{Action, CleanupReason};
 use grindbot::core::planner;
@@ -10,13 +9,13 @@ use grindbot::core::state::{
 use hegel::generators as gs;
 use hegel::{Generator, TestCase};
 
-fn datetime_generator() -> impl Generator<chrono::DateTime<chrono::Utc>> {
+fn datetime_generator() -> impl Generator<jiff::Timestamp> {
     gs::integers::<i64>()
         .min_value(0)
         .max_value(365 * 50)
         .map(|days| {
-            chrono::Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap()
-                + chrono::Duration::days(days)
+            jiff::civil::date(2024, 1, 1).at(0, 0, 0, 0).in_tz("UTC").unwrap().timestamp()
+                + jiff::Span::new().hours(days * 24)
         })
 }
 
@@ -203,7 +202,7 @@ fn malformed_handoff_is_diagnostic_cleanup_only() {
         implementers: vec![ImplementerState {
             issue_number: 42, session_id: "s".into(), workspace_name: "ws".into(),
             workspace_path: "/tmp/ws".into(), base_commit: "base".into(),
-            started_at: chrono::Utc::now(), status: ImplementerStatus::Malformed { error: "bad json".into() },
+            started_at: jiff::Timestamp::now(), status: ImplementerStatus::Malformed { error: "bad json".into() },
         }],
         workspaces: vec![], main_head: "main".into(), completed_issues: vec![],
     };
@@ -287,7 +286,7 @@ fn duplicate_running_implementers_are_not_started_again() {
             workspace_name: workspace_name.into(),
             workspace_path: format!("/tmp/{workspace_name}"),
             base_commit: "abc".into(),
-            started_at: chrono::Utc::now(),
+            started_at: jiff::Timestamp::now(),
             status: ImplementerStatus::Running,
         });
     }
@@ -326,7 +325,7 @@ fn duplicate_running_implementers_same_workspace_are_not_started_again() {
             workspace_name: "grindbot-0".into(),
             workspace_path: "/tmp/grindbot-0".into(),
             base_commit: base_commit.into(),
-            started_at: chrono::Utc.with_ymd_and_hms(2024, 1, 2, 0, 0, 0).unwrap(),
+            started_at: "2024-01-02T00:00:00Z".parse::<jiff::Timestamp>().unwrap(),
             status: ImplementerStatus::Running,
         });
     }

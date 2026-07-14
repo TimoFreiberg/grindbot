@@ -1,3 +1,4 @@
+use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 
 /// Complete state snapshot fed to the planner.
@@ -17,8 +18,8 @@ pub struct Issue {
     pub title: String,
     pub body: String,
     pub author: String,
-    pub created_at: chrono::DateTime<chrono::Utc>,
-    pub updated_at: chrono::DateTime<chrono::Utc>,
+    pub created_at: Timestamp,
+    pub updated_at: Timestamp,
     pub comments: Vec<Comment>,
 }
 
@@ -26,7 +27,7 @@ pub struct Issue {
 pub struct Comment {
     pub author: String,
     pub body: String,
-    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub created_at: Timestamp,
     pub is_supervisor: bool,
 }
 
@@ -37,7 +38,7 @@ pub struct ImplementerState {
     pub workspace_name: String,
     pub workspace_path: String,
     pub base_commit: String,
-    pub started_at: chrono::DateTime<chrono::Utc>,
+    pub started_at: Timestamp,
     pub status: ImplementerStatus,
 }
 

@@ -67,7 +67,9 @@ pub(crate) async fn build_status_output(
                 active.session_id,
                 indicator,
                 status_str,
-                started.format("%Y-%m-%d %H:%M UTC")
+                jiff::fmt::strtime::format("%Y-%m-%d %H:%M UTC", started)
+                    .unwrap()
+                    .to_string()
             ));
         }
     }

@@ -535,7 +535,7 @@ pub async fn start_implementer(
         workspace_name: workspace_name.to_string(),
         workspace_path: workspace_path.clone(),
         base_commit: base_commit.to_string(),
-        started_at: chrono::Utc::now().to_rfc3339(),
+        started_at: jiff::Timestamp::now().to_string(),
         port: session_info.port,
         bearer_token: session_info.bearer_token.clone(),
         credential_file: session_info.credential_file.clone(),
@@ -609,7 +609,7 @@ pub async fn merge_implementation(
             state_file.add_completed(CompletedTask {
                 issue_number,
                 commit: commit.to_string(),
-                completed_at: chrono::Utc::now().to_rfc3339(),
+                completed_at: jiff::Timestamp::now().to_string(),
             });
 
             // Reset conflict retries
@@ -792,7 +792,7 @@ pub async fn resolve_conflict(
             state_file.add_completed(CompletedTask {
                 issue_number,
                 commit: commit.to_string(),
-                completed_at: chrono::Utc::now().to_rfc3339(),
+                completed_at: jiff::Timestamp::now().to_string(),
             });
             state_file.reset_conflict_retry(issue_number);
 
@@ -856,7 +856,7 @@ pub async fn process_result(
             state_file.add_needs_feedback(NeedsFeedbackTask {
                 issue_number,
                 message: message.clone(),
-                timestamp: chrono::Utc::now().to_rfc3339(),
+                timestamp: jiff::Timestamp::now().to_string(),
             });
 
             cleanup_workspace_action(config, io, workspace_name, workspace_path).await?;
@@ -917,10 +917,9 @@ pub(crate) fn reconstruct_session_info_pub(active: &ActiveImplementer) -> Sessio
 }
 
 /// Parse a stored RFC 3339 timestamp; falls back to now() on parse failure.
-pub(crate) fn parse_started_at(s: &str) -> chrono::DateTime<chrono::Utc> {
-    chrono::DateTime::parse_from_rfc3339(s)
-        .map(|dt| dt.with_timezone(&chrono::Utc))
-        .unwrap_or_else(|_| chrono::Utc::now())
+pub(crate) fn parse_started_at(s: &str) -> jiff::Timestamp {
+    s.parse::<jiff::Timestamp>()
+        .unwrap_or_else(|_| jiff::Timestamp::now())
 }
 
 /// Pre-flight check: verify the polytoken binary exists and is callable.
@@ -1042,7 +1041,7 @@ mod tests {
     #[test]
     fn test_parse_started_at_valid() {
         let dt = parse_started_at("2024-01-01T00:00:00Z");
-        assert_eq!(dt.to_rfc3339(), "2024-01-01T00:00:00+00:00");
+        assert_eq!(dt.to_string(), "2024-01-01T00:00:00Z");
     }
 
     #[test]
@@ -1051,9 +1050,7 @@ mod tests {
         let dt = parse_started_at("2024-01-01T00:00:00Z");
         assert_eq!(
             dt,
-            chrono::DateTime::parse_from_rfc3339("2024-01-01T00:00:00Z")
-                .unwrap()
-                .with_timezone(&chrono::Utc)
+            "2024-01-01T00:00:00Z".parse::<jiff::Timestamp>().unwrap()
         );
     }
 
@@ -1061,8 +1058,8 @@ mod tests {
     fn test_parse_started_at_invalid_falls_back() {
         let dt = parse_started_at("not-a-date");
         // Should fall back to now (within a few seconds)
-        let now = chrono::Utc::now();
-        let diff = (now - dt).num_seconds().abs();
+        let now = jiff::Timestamp::now();
+        let diff = (now - dt).total(jiff::Unit::Second).unwrap().abs() as i64;
         assert!(diff < 5, "fallback should be close to now, diff={}s", diff);
     }
 
@@ -1081,7 +1078,7 @@ mod tests {
                     workspace_name: "ws1".to_string(),
                     workspace_path: "/tmp/ws1".to_string(),
                     base_commit: "abc".to_string(),
-                    started_at: chrono::Utc::now(),
+                    started_at: jiff::Timestamp::now(),
                     status: ImplementerStatus::Running,
                 },
                 ImplementerState {
@@ -1090,7 +1087,7 @@ mod tests {
                     workspace_name: "ws2".to_string(),
                     workspace_path: "/tmp/ws2".to_string(),
                     base_commit: "def".to_string(),
-                    started_at: chrono::Utc::now(),
+                    started_at: jiff::Timestamp::now(),
                     status: ImplementerStatus::Finished(ImplementerResult::Done {
                         commit: "xyz".to_string(),
                     }),
@@ -1101,7 +1098,7 @@ mod tests {
                     workspace_name: "ws3".to_string(),
                     workspace_path: "/tmp/ws3".to_string(),
                     base_commit: "ghi".to_string(),
-                    started_at: chrono::Utc::now(),
+                    started_at: jiff::Timestamp::now(),
                     status: ImplementerStatus::Crashed,
                 },
             ],

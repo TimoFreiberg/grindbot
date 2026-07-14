@@ -52,8 +52,8 @@ mod tests {
             title: "Test".to_string(),
             body: "Body".to_string(),
             author: author.to_string(),
-            created_at: chrono::Utc::now(),
-            updated_at: chrono::Utc::now(),
+            created_at: jiff::Timestamp::now(),
+            updated_at: jiff::Timestamp::now(),
             comments,
         }
     }
@@ -70,7 +70,7 @@ mod tests {
             } else {
                 "Nice work".to_string()
             },
-            created_at: chrono::Utc::now(),
+            created_at: jiff::Timestamp::now(),
             is_supervisor,
         }
     }

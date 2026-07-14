@@ -141,7 +141,7 @@ pub fn done(commit: &str) -> anyhow::Result<()> {
         );
     }
 
-    let timestamp = chrono::Utc::now().to_rfc3339();
+    let timestamp = jiff::Timestamp::now().to_string();
     let result = HandoffResult::Done {
         manifest_version: 1,
         commit: commit.to_string(),
@@ -160,7 +160,7 @@ pub fn done(commit: &str) -> anyhow::Result<()> {
 pub fn needs_feedback(message: &str) -> anyhow::Result<()> {
     let workspace_root = find_workspace_root()?;
 
-    let timestamp = chrono::Utc::now().to_rfc3339();
+    let timestamp = jiff::Timestamp::now().to_string();
     let result = HandoffResult::NeedsFeedback {
         message: message.to_string(),
         timestamp,

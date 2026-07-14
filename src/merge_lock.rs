@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use chrono::Utc;
 use serde::{Deserialize, Serialize};
 
 use crate::io::Filesystem;
@@ -34,7 +33,7 @@ impl MergeLock {
             workspace: workspace.to_string(),
             session: session.to_string(),
             owner: owner.to_string(),
-            timestamp: Utc::now().to_rfc3339(),
+            timestamp: jiff::Timestamp::now().to_string(),
         };
         let content = serde_json::to_string_pretty(&metadata)?;
         if !fs.try_create_exclusive(&path, &content)? {

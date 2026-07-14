@@ -1,19 +1,18 @@
 //! Property-based tests for the core filters (invariants 10-14).
 
-use chrono::TimeZone;
 use grindbot::config::Config;
 use grindbot::core::filters::is_eligible;
 use grindbot::core::state::{Comment, Issue};
 use hegel::generators as gs;
 use hegel::{Generator, TestCase};
 
-fn datetime_generator() -> impl hegel::Generator<chrono::DateTime<chrono::Utc>> {
+fn datetime_generator() -> impl hegel::Generator<jiff::Timestamp> {
     gs::integers::<i64>()
         .min_value(0)
         .max_value(365 * 50)
         .map(|days| {
-            chrono::Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap()
-                + chrono::Duration::days(days)
+            jiff::civil::date(2024, 1, 1).at(0, 0, 0, 0).in_tz("UTC").unwrap().timestamp()
+                + jiff::Span::new().hours(days * 24)
         })
 }
 
@@ -161,8 +160,8 @@ fn empty_allowlist_and_empty_comments_are_ineligible() {
         title: "t".into(),
         body: "b".into(),
         author: "alice".into(),
-        created_at: chrono::Utc::now(),
-        updated_at: chrono::Utc::now(),
+        created_at: jiff::Timestamp::now(),
+        updated_at: jiff::Timestamp::now(),
         comments: vec![],
     };
     assert!(!is_eligible(&issue, &Config::default(), &[], &[]));

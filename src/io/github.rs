@@ -160,7 +160,7 @@ pub async fn fetch_comments(owner: &str, repo: &str, issue: u64) -> anyhow::Resu
         .into_iter()
         .map(|c| {
             let is_supervisor = c.body.trim_start().starts_with("<!-- grindbot -->");
-            let created_at = parse_gh_datetime(&c.created_at).unwrap_or(chrono::Utc::now());
+            let created_at = parse_gh_datetime(&c.created_at).unwrap_or(jiff::Timestamp::now());
             Comment {
                 author: c.author,
                 body: c.body,
@@ -173,9 +173,9 @@ pub async fn fetch_comments(owner: &str, repo: &str, issue: u64) -> anyhow::Resu
     Ok(comments)
 }
 
-fn parse_gh_datetime(s: &str) -> anyhow::Result<chrono::DateTime<chrono::Utc>> {
+fn parse_gh_datetime(s: &str) -> anyhow::Result<jiff::Timestamp> {
     // gh returns ISO 8601 with 'Z' suffix, e.g. "2024-01-15T12:30:00Z"
-    Ok(chrono::DateTime::parse_from_rfc3339(s)?.with_timezone(&chrono::Utc))
+    Ok(s.parse::<jiff::Timestamp>()?)
 }
 
 /// Enrich issues with comments (only for allowlisted authors to minimize API calls).

@@ -174,7 +174,6 @@ mod tests {
     use crate::core::state::{
         Comment, ImplementerResult, ImplementerState, ImplementerStatus, Issue, WorkspaceState,
     };
-    use chrono::TimeZone;
 
     fn make_config(max_parallelism: usize, allowlist: Vec<String>) -> Config {
         Config {
@@ -200,10 +199,12 @@ mod tests {
             title: format!("Issue {}", number),
             body: "Body".to_string(),
             author: author.to_string(),
-            created_at: chrono::Utc
-                .with_ymd_and_hms(2024, 1, number.min(28) as u32, 0, 0, 0)
-                .unwrap(),
-            updated_at: chrono::Utc::now(),
+            created_at: jiff::civil::date(2024, 1, number.min(28) as i8)
+                .at(0, 0, 0, 0)
+                .in_tz("UTC")
+                .unwrap()
+                .timestamp(),
+            updated_at: jiff::Timestamp::now(),
             comments: vec![],
         }
     }
@@ -269,7 +270,7 @@ mod tests {
             workspace_name: "grindbot-1".to_string(),
             workspace_path: "/tmp/grindbot-1".to_string(),
             base_commit: "abc".to_string(),
-            started_at: chrono::Utc::now(),
+            started_at: jiff::Timestamp::now(),
             status: ImplementerStatus::Running,
         };
         let state = make_state(config, vec![issue], vec![imp], vec![]);
@@ -346,7 +347,7 @@ mod tests {
             workspace_name: "grindbot-1".to_string(),
             workspace_path: "/tmp/grindbot-1".to_string(),
             base_commit: "base".to_string(),
-            started_at: chrono::Utc::now(),
+            started_at: jiff::Timestamp::now(),
             status: ImplementerStatus::Finished(ImplementerResult::Done {
                 commit: "newcommit".to_string(),
             }),
@@ -368,7 +369,7 @@ mod tests {
             workspace_name: "grindbot-1".to_string(),
             workspace_path: "/tmp/grindbot-1".to_string(),
             base_commit: "base".to_string(),
-            started_at: chrono::Utc::now(),
+            started_at: jiff::Timestamp::now(),
             status: ImplementerStatus::Finished(ImplementerResult::NeedsFeedback {
                 message: "Need more info".to_string(),
             }),
@@ -400,8 +401,8 @@ mod tests {
             title: "Issue 2".to_string(),
             body: "Body".to_string(),
             author: "alice".to_string(),
-            created_at: chrono::Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap(),
-            updated_at: chrono::Utc::now(),
+            created_at: "2024-01-01T00:00:00Z".parse::<jiff::Timestamp>().unwrap(),
+            updated_at: jiff::Timestamp::now(),
             comments: vec![],
         };
         let issue1 = Issue {
@@ -409,8 +410,8 @@ mod tests {
             title: "Issue 1".to_string(),
             body: "Body".to_string(),
             author: "alice".to_string(),
-            created_at: chrono::Utc.with_ymd_and_hms(2024, 1, 2, 0, 0, 0).unwrap(),
-            updated_at: chrono::Utc::now(),
+            created_at: "2024-01-02T00:00:00Z".parse::<jiff::Timestamp>().unwrap(),
+            updated_at: jiff::Timestamp::now(),
             comments: vec![],
         };
         let state = make_state(config, vec![issue1, issue2], vec![], vec![]);
@@ -433,12 +434,12 @@ mod tests {
             title: "Issue 1".to_string(),
             body: "Body".to_string(),
             author: "alice".to_string(),
-            created_at: chrono::Utc::now(),
-            updated_at: chrono::Utc::now(),
+            created_at: jiff::Timestamp::now(),
+            updated_at: jiff::Timestamp::now(),
             comments: vec![Comment {
                 author: "grindbot".to_string(),
                 body: "<!-- grindbot --> Done".to_string(),
-                created_at: chrono::Utc::now(),
+                created_at: jiff::Timestamp::now(),
                 is_supervisor: true,
             }],
         };
