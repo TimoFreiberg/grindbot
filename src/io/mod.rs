@@ -78,6 +78,7 @@ pub enum RebaseResult {
 #[async_trait::async_trait]
 pub trait PolytokenClient: Send + Sync {
     async fn spawn_session(&self, workspace_dir: &str) -> anyhow::Result<SessionInfo>;
+    async fn resolve_session(&self, session_id: &str) -> anyhow::Result<SessionInfo>;
     async fn set_facet(&self, session: &SessionInfo, facet: &str) -> anyhow::Result<()>;
     async fn enable_adventurous_handoff(&self, session: &SessionInfo) -> anyhow::Result<()>;
     async fn set_permission_mode(&self, session: &SessionInfo, mode: &str) -> anyhow::Result<()>;

@@ -49,6 +49,7 @@ pub struct ImplementerState {
 #[derive(Clone, Debug)]
 pub enum ImplementerStatus {
     Running,
+    Stalled,
     Finished(ImplementerResult),
     Malformed { error: String },
     Crashed,

@@ -42,6 +42,7 @@ pub enum Action {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CleanupReason {
     SessionCrashed,
+    SessionStalled,
     SessionFinished,
     MalformedHandoff,
     OrphanedWorkspace,

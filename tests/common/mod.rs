@@ -289,6 +289,18 @@ impl PolytokenClient for MockPolytokenClient {
         })
     }
 
+    async fn resolve_session(&self, session_id: &str) -> anyhow::Result<SessionInfo> {
+        if !self.alive_sessions.lock().unwrap().contains(session_id) {
+            anyhow::bail!("session not alive: {}", session_id);
+        }
+        Ok(SessionInfo {
+            session_id: session_id.to_string(),
+            port: 12345,
+            credential_file: "/tmp/cred.json".to_string(),
+            bearer_token: "test-token".to_string(),
+        })
+    }
+
     async fn set_facet(&self, session: &SessionInfo, facet: &str) -> anyhow::Result<()> {
         self.facet_calls
             .lock()

@@ -108,9 +108,7 @@ async fn test_merge_flow_success() {
         workspace_path: "/tmp/grindbot-42".into(),
         base_commit: "basecommit456".into(),
         started_at: "2024-01-01T00:00:00Z".into(),
-        port: 0,
-        bearer_token: String::new(),
-        credential_file: String::new(),
+        last_used_tokens: None,
         last_assistant_text: None,
         stall_cycles: 0,
     });
@@ -210,8 +208,8 @@ async fn test_crashed_session_cleanup() {
     let session_info = grindbot::io::SessionInfo {
         session_id: "dead-session".to_string(),
         port: 0,
-        credential_file: String::new(),
         bearer_token: String::new(),
+        credential_file: String::new(),
     };
     assert!(!polytoken.is_alive(&session_info).await);
 
@@ -336,9 +334,7 @@ fn test_state_file_atomic_save_load() {
         workspace_path: "/tmp/grindbot-42".to_string(),
         base_commit: "abc".to_string(),
         started_at: "2024-01-01T00:00:00Z".to_string(),
-        port: 12345,
-        bearer_token: "test-token".to_string(),
-        credential_file: "/tmp/cred.json".to_string(),
+        last_used_tokens: None,
         last_assistant_text: None,
         stall_cycles: 0,
     });
@@ -401,9 +397,7 @@ async fn test_gather_state_populates_token_fields() {
         workspace_path: "/tmp/grindbot-42".into(),
         base_commit: "basecommit456".into(),
         started_at: "2024-01-01T00:00:00Z".into(),
-        port: 12345,
-        bearer_token: "tok".into(),
-        credential_file: "/tmp/cred.json".into(),
+        last_used_tokens: None,
         last_assistant_text: None,
         stall_cycles: 0,
     });

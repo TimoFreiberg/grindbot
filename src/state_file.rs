@@ -24,11 +24,7 @@ pub struct ActiveImplementer {
     pub base_commit: String,
     pub started_at: String,
     #[serde(default)]
-    pub port: u16,
-    #[serde(default)]
-    pub bearer_token: String,
-    #[serde(default)]
-    pub credential_file: String,
+    pub last_used_tokens: Option<u32>,
     #[serde(default)]
     pub last_assistant_text: Option<String>,
     #[serde(default)]
@@ -216,9 +212,7 @@ mod tests {
             workspace_path: "/tmp/grindbot-42".to_string(),
             base_commit: "abc".to_string(),
             started_at: "2024-01-01T00:00:00Z".to_string(),
-            port: 12345,
-            bearer_token: "test-token".to_string(),
-            credential_file: "/tmp/cred.json".to_string(),
+            last_used_tokens: None,
             last_assistant_text: None,
             stall_cycles: 0,
         });
@@ -276,23 +270,18 @@ mod tests {
             workspace_path: "/tmp/grindbot-42".to_string(),
             base_commit: "abc123".to_string(),
             started_at: "2024-01-15T12:30:00Z".to_string(),
-            port: 8080,
-            bearer_token: "secret-token".to_string(),
-            credential_file: "/tmp/creds.json".to_string(),
+            last_used_tokens: None,
             last_assistant_text: None,
             stall_cycles: 0,
         };
         let json = serde_json::to_string(&imp).unwrap();
         let restored: ActiveImplementer = serde_json::from_str(&json).unwrap();
-        assert_eq!(restored.port, 8080);
-        assert_eq!(restored.bearer_token, "secret-token");
-        assert_eq!(restored.credential_file, "/tmp/creds.json");
         assert_eq!(restored.session_id, "sess-abc");
     }
 
     #[test]
     fn test_active_implementer_roundtrip_with_tracking() {
-        // AC.6: last_assistant_text and stall_cycles survive serialize/deserialize
+        // AC.6: last_used_tokens, last_assistant_text, and stall_cycles survive serialize/deserialize
         let imp = ActiveImplementer {
             issue_number: 99,
             session_id: "sess-track".to_string(),
@@ -300,14 +289,13 @@ mod tests {
             workspace_path: "/tmp/grindbot-99".to_string(),
             base_commit: "def456".to_string(),
             started_at: "2024-06-01T10:00:00Z".to_string(),
-            port: 9999,
-            bearer_token: "tok".to_string(),
-            credential_file: "/tmp/c.json".to_string(),
+            last_used_tokens: Some(42000),
             last_assistant_text: Some("working on the thing".to_string()),
             stall_cycles: 3,
         };
         let json = serde_json::to_string(&imp).unwrap();
         let restored: ActiveImplementer = serde_json::from_str(&json).unwrap();
+        assert_eq!(restored.last_used_tokens, Some(42000));
         assert_eq!(restored.last_assistant_text, Some("working on the thing".to_string()));
         assert_eq!(restored.stall_cycles, 3);
     }
@@ -315,7 +303,7 @@ mod tests {
     #[test]
     fn test_old_state_file_deserializes_with_defaults() {
         // Simulate an old state file that lacks port/bearer_token/credential_file
-        // and the new tracking fields (last_assistant_text, stall_cycles)
+        // and the new tracking fields (last_used_tokens, last_assistant_text, stall_cycles)
         let json = r#"{
             "version": 1,
             "active_implementers": [{
@@ -331,10 +319,8 @@ mod tests {
         }"#;
         let state: StateFile = serde_json::from_str(json).unwrap();
         assert_eq!(state.active_implementers.len(), 1);
-        assert_eq!(state.active_implementers[0].port, 0);
-        assert_eq!(state.active_implementers[0].bearer_token, "");
-        assert_eq!(state.active_implementers[0].credential_file, "");
         // AC.2: new tracking fields default correctly
+        assert_eq!(state.active_implementers[0].last_used_tokens, None);
         assert_eq!(state.active_implementers[0].last_assistant_text, None);
         assert_eq!(state.active_implementers[0].stall_cycles, 0);
     }

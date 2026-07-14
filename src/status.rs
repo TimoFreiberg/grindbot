@@ -55,8 +55,10 @@ pub(crate) async fn build_status_output(
             state_file.active_implementers.len()
         ));
         for active in &state_file.active_implementers {
-            let session_info = supervisor::reconstruct_session_info_pub(active);
-            let alive = io.polytoken.is_alive(&session_info).await;
+            let alive = match io.polytoken.resolve_session(&active.session_id).await {
+                Ok(session_info) => io.polytoken.is_alive(&session_info).await,
+                Err(_) => false,
+            };
             let status_str = if alive { "running" } else { "dead" };
             let indicator = if alive { "●" } else { "○" };
             let started = supervisor::parse_started_at(&active.started_at);
@@ -229,6 +231,17 @@ mod tests {
                 credential_file: String::new(),
             })
         }
+        async fn resolve_session(
+            &self,
+            session_id: &str,
+        ) -> anyhow::Result<crate::io::SessionInfo> {
+            Ok(crate::io::SessionInfo {
+                session_id: session_id.to_string(),
+                port: 12345,
+                bearer_token: "tok".to_string(),
+                credential_file: String::new(),
+            })
+        }
         async fn set_facet(
             &self,
             _session: &crate::io::SessionInfo,
@@ -316,10 +329,8 @@ mod tests {
                 workspace_path: "/tmp/ws42".to_string(),
                 base_commit: "abc".to_string(),
                 started_at: "2024-01-15T12:30:00Z".to_string(),
-                port: 12345,
-                bearer_token: "tok".to_string(),
-                credential_file: "/tmp/cred.json".to_string(),
                 last_used_tokens: None,
+                last_assistant_text: None,
                 stall_cycles: 0,
             });
         state_file

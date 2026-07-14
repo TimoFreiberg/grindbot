@@ -93,26 +93,25 @@ impl PolytokenClient for RealPolytokenClient {
 
         let stdout = String::from_utf8_lossy(&output.stdout);
 
-        // Parse session ID and port from stdout.
-        // Expected format: "Session ID: <id>\nPort: <port>\n"
-        // or similar. We try multiple parsing strategies.
-        let (session_id, port) = parse_session_output(&stdout)?;
+        // Parse session ID from stdout.
+        let (session_id, _) = parse_session_output(&stdout)?;
 
-        // Step 2: Find the credential file.
-        // Try `polytoken sessions --format json` to find the credential_file_path.
-        let credential_file = self.find_credential_file(&session_id).await?;
-
-        // Step 3: Read the bearer token from the credential file.
-        let cred_content = std::fs::read_to_string(&credential_file)?;
-        #[derive(serde::Deserialize)]
-        struct Credential {
-            token: String,
-        }
-        let cred: Credential = serde_json::from_str(&cred_content)?;
-        let bearer_token = cred.token;
+        // Look up port, credential file, and bearer token from the live
+        // session registry. This is the same path used by resolve_session.
+        let (port, credential_file, bearer_token) = self.lookup_session(&session_id).await?;
 
         Ok(SessionInfo {
             session_id,
+            port,
+            credential_file,
+            bearer_token,
+        })
+    }
+
+    async fn resolve_session(&self, session_id: &str) -> anyhow::Result<SessionInfo> {
+        let (port, credential_file, bearer_token) = self.lookup_session(session_id).await?;
+        Ok(SessionInfo {
+            session_id: session_id.to_string(),
             port,
             credential_file,
             bearer_token,
@@ -134,8 +133,16 @@ impl PolytokenClient for RealPolytokenClient {
     }
 
     async fn enable_adventurous_handoff(&self, session: &SessionInfo) -> anyhow::Result<()> {
-        // First check if it's already enabled
         let url = format!("{}/adventurous-handoff", self.base_url(session));
+
+        // Check if already enabled by parsing the GET response body.
+        // The endpoint always returns HTTP 200; the enabled state is in the
+        // JSON body, not the status code.
+        #[derive(serde::Deserialize)]
+        struct HandoffState {
+            enabled: bool,
+        }
+
         let resp = self
             .http_client
             .get(&url)
@@ -150,12 +157,22 @@ impl PolytokenClient for RealPolytokenClient {
                 )
             })?;
 
-        if resp.status().is_success() {
-            // Already enabled
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!(
+                "enable_adventurous_handoff GET failed (HTTP {}): {}",
+                status,
+                body
+            );
+        }
+
+        let state: HandoffState = resp.json().await?;
+        if state.enabled {
             return Ok(());
         }
 
-        // Enable it
+        // Not enabled — POST to enable it
         let resp = self
             .http_client
             .post(&url)
@@ -174,7 +191,7 @@ impl PolytokenClient for RealPolytokenClient {
             let status = resp.status();
             let body = resp.text().await.unwrap_or_default();
             anyhow::bail!(
-                "enable_adventurous_handoff failed (HTTP {}): {}",
+                "enable_adventurous_handoff POST failed (HTTP {}): {}",
                 status,
                 body
             );
@@ -301,7 +318,11 @@ impl PolytokenClient for RealPolytokenClient {
 }
 
 impl RealPolytokenClient {
-    async fn find_credential_file(&self, session_id: &str) -> anyhow::Result<String> {
+    /// Look up a live session by ID via `polytoken sessions --format json`.
+    /// Returns the port, credential file, and bearer token needed to talk
+    /// to the daemon. This replaces storing those fields in the state file —
+    /// the session ID is the stable identifier; ports change on restart.
+    async fn lookup_session(&self, session_id: &str) -> anyhow::Result<(u16, String, String)> {
         tracing::debug!(command = %self.binary, session_id, "running external command");
         let output = tokio::process::Command::new(&self.binary)
             .args(["sessions", "--format", "json"])
@@ -320,6 +341,8 @@ impl RealPolytokenClient {
             #[serde(rename = "session_id")]
             id: String,
             #[serde(default)]
+            port: u16,
+            #[serde(default)]
             credential_file_path: Option<String>,
         }
 
@@ -330,9 +353,19 @@ impl RealPolytokenClient {
             .find(|s| s.id == session_id)
             .ok_or_else(|| anyhow::anyhow!("session {} not found in sessions list", session_id))?;
 
-        record
+        let credential_file = record
             .credential_file_path
-            .ok_or_else(|| anyhow::anyhow!("no credential_file_path for session {}", session_id))
+            .ok_or_else(|| anyhow::anyhow!("no credential_file_path for session {}", session_id))?;
+
+        let cred_content = std::fs::read_to_string(&credential_file)?;
+        #[derive(serde::Deserialize)]
+        struct Credential {
+            token: String,
+        }
+        let cred: Credential = serde_json::from_str(&cred_content)?;
+        let bearer_token = cred.token;
+
+        Ok((record.port, credential_file, bearer_token))
     }
 }
 

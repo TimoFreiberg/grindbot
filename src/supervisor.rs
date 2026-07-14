@@ -11,7 +11,7 @@ use crate::core::state::{
     WorkspaceState,
 };
 use crate::io::github::fetch_comments;
-use crate::io::{IoLayer, RebaseResult, SessionInfo};
+use crate::io::{IoLayer, RebaseResult};
 use crate::merge_lock::MergeLock;
 use crate::prompt;
 use crate::state_file::{ActiveImplementer, CompletedTask, NeedsFeedbackTask, StateFile};
@@ -163,7 +163,46 @@ pub async fn gather_state(
     // Build implementer states from state file + live session checks
     let mut implementers = Vec::new();
     for active in &mut state_file.active_implementers {
-        let session_info = reconstruct_session_info(active);
+        // Resolve session info (port, bearer token, etc.) from the live
+        // session registry. If this fails, the session is dead.
+        let session_info = match io.polytoken.resolve_session(&active.session_id).await {
+            Ok(info) => info,
+            Err(_) => {
+                // Session not found in registry — treat as dead
+                let result_path = format!("{}/.grindbot/result.json", active.workspace_path);
+                let has_result = io.fs.exists(&result_path);
+                let status = if has_result {
+                    let result_content = io.fs.read_to_string(&result_path).unwrap_or_default();
+                    match serde_json::from_str::<HandoffResult>(&result_content) {
+                        Ok(HandoffResult::Done { commit, .. }) => {
+                            ImplementerStatus::Finished(ImplementerResult::Done { commit })
+                        }
+                        Ok(HandoffResult::NeedsFeedback { message, .. }) => {
+                            ImplementerStatus::Finished(ImplementerResult::NeedsFeedback { message })
+                        }
+                        Err(error) => ImplementerStatus::Malformed {
+                            error: error.to_string(),
+                        },
+                    }
+                } else {
+                    ImplementerStatus::Crashed
+                };
+                implementers.push(ImplementerState {
+                    issue_number: active.issue_number,
+                    session_id: active.session_id.clone(),
+                    workspace_name: active.workspace_name.clone(),
+                    workspace_path: active.workspace_path.clone(),
+                    base_commit: active.base_commit.clone(),
+                    started_at: parse_started_at(&active.started_at),
+                    status,
+                    used_tokens: None,
+                    limit_tokens: None,
+                    stall_cycles: active.stall_cycles,
+                    most_recent_assistant_text: None,
+                });
+                continue;
+            }
+        };
 
         // Check if session is alive via get_state (single round-trip)
         let state_result = io.polytoken.get_state(&session_info).await;
@@ -171,7 +210,7 @@ pub async fn gather_state(
 
         // Update stall tracking and extract progress data
         let (used_tokens, limit_tokens, snippet, stall_cycles, turn_in_flight) = if let Ok(ref ss) = state_result {
-            update_stall_tracking(active, ss.most_recent_assistant_text.as_deref());
+            update_stall_tracking(active, ss.used_tokens, ss.most_recent_assistant_text.as_deref());
             (
                 ss.used_tokens,
                 ss.limit_tokens,
@@ -203,6 +242,10 @@ pub async fn gather_state(
                     error: error.to_string(),
                 },
             }
+        } else if !turn_in_flight {
+            // Daemon is alive but no turn in flight and no result file —
+            // the agent stopped without calling the handoff binary.
+            ImplementerStatus::Stalled
         } else {
             ImplementerStatus::Running
         };
@@ -251,8 +294,10 @@ pub async fn gather_state(
         let session_id = active_impl.as_ref().map(|i| i.session_id.clone());
 
         let daemon_alive = if let Some(ref active) = active_impl {
-            let session_info = reconstruct_session_info(active);
-            io.polytoken.is_alive(&session_info).await
+            match io.polytoken.resolve_session(&active.session_id).await {
+                Ok(session_info) => io.polytoken.is_alive(&session_info).await,
+                Err(_) => false,
+            }
         } else {
             false
         };
@@ -310,7 +355,40 @@ pub async fn startup_cleanup(
 
         if let Some(active) = active {
             // Check if session is alive
-            let session_info = reconstruct_session_info(&active);
+            let session_info = match io.polytoken.resolve_session(&active.session_id).await {
+                Ok(info) => info,
+                Err(_) => {
+                    // Session not in registry — treat as dead and clean up below
+                    tracing::info!("startup cleanup: session {} not found for {}", active.session_id, ws_name);
+                    let result_path = format!("{}/.grindbot/result.json", active.workspace_path);
+                    if io.fs.exists(&result_path) {
+                        if let Ok(content) = io.fs.read_to_string(&result_path) {
+                            if let Ok(result) = serde_json::from_str::<HandoffResult>(&content) {
+                                process_result(
+                                    config,
+                                    io,
+                                    state_file,
+                                    active.issue_number,
+                                    &active.workspace_name,
+                                    &active.workspace_path,
+                                    &active.base_commit,
+                                    &result,
+                                )
+                                .await?;
+                            }
+                        }
+                    }
+                    cleanup_workspace_action(
+                        config,
+                        io,
+                        &active.workspace_name,
+                        &active.workspace_path,
+                    )
+                    .await?;
+                    state_file.remove_implementer(&active.workspace_name);
+                    continue;
+                }
+            };
 
             if !io.polytoken.is_alive(&session_info).await {
                 tracing::info!("startup cleanup: dead session for {}", ws_name);
@@ -393,6 +471,31 @@ pub async fn execute_action(
                 workspace_name,
                 reason
             );
+            // Terminate the daemon session if there's an active implementer
+            let active = state_file
+                .active_implementers
+                .iter()
+                .find(|i| i.workspace_name == *workspace_name)
+                .cloned();
+            if let Some(ref active) = active {
+                match io.polytoken.resolve_session(&active.session_id).await {
+                    Ok(session_info) => {
+                        if let Err(e) = io.polytoken.terminate(&session_info).await {
+                            tracing::warn!(
+                                "failed to terminate session {}: {}",
+                                active.session_id,
+                                e
+                            );
+                        }
+                    }
+                    Err(_) => {
+                        tracing::debug!(
+                            "session {} not in registry during cleanup",
+                            active.session_id
+                        );
+                    }
+                }
+            }
             let ws_path = find_workspace_path(config, state_file, workspace_name);
             if let Some(ref path) = ws_path {
                 cleanup_workspace_action(config, io, workspace_name, path).await?;
@@ -465,25 +568,23 @@ pub async fn execute_action(
             state_file.remove_implementer(workspace_name);
         }
         Action::TerminateSession { session_id } => {
-            // Look up the implementer by session_id to get full SessionInfo
+            // Look up the implementer by session_id to resolve full SessionInfo
             let active = state_file
                 .active_implementers
                 .iter()
                 .find(|i| i.session_id == *session_id)
                 .cloned();
-            let session_info = if let Some(ref active) = active {
-                reconstruct_session_info(active)
-            } else {
-                // Fallback: construct with what we have (session_id only)
-                SessionInfo {
-                    session_id: session_id.clone(),
-                    port: 0,
-                    bearer_token: String::new(),
-                    credential_file: String::new(),
+            if let Some(ref active) = active {
+                match io.polytoken.resolve_session(&active.session_id).await {
+                    Ok(session_info) => {
+                        if let Err(e) = io.polytoken.terminate(&session_info).await {
+                            tracing::warn!("failed to terminate session {}: {}", session_id, e);
+                        }
+                    }
+                    Err(_) => {
+                        tracing::debug!("session {} not in registry during terminate", session_id);
+                    }
                 }
-            };
-            if let Err(e) = io.polytoken.terminate(&session_info).await {
-                tracing::warn!("failed to terminate session {}: {}", session_id, e);
             }
         }
         Action::PushToRemote => {
@@ -569,9 +670,7 @@ pub async fn start_implementer(
         workspace_path: workspace_path.clone(),
         base_commit: base_commit.to_string(),
         started_at: jiff::Timestamp::now().to_string(),
-        port: session_info.port,
-        bearer_token: session_info.bearer_token.clone(),
-        credential_file: session_info.credential_file.clone(),
+        last_used_tokens: None,
         last_assistant_text: None,
         stall_cycles: 0,
     });
@@ -945,21 +1044,6 @@ fn find_workspace_path(
         .map(|i| i.workspace_path.clone())
 }
 
-/// Reconstruct a SessionInfo from the persisted ActiveImplementer fields.
-fn reconstruct_session_info(active: &ActiveImplementer) -> SessionInfo {
-    SessionInfo {
-        session_id: active.session_id.clone(),
-        port: active.port,
-        bearer_token: active.bearer_token.clone(),
-        credential_file: active.credential_file.clone(),
-    }
-}
-
-/// Public wrapper for use by other modules (e.g. status command).
-pub(crate) fn reconstruct_session_info_pub(active: &ActiveImplementer) -> SessionInfo {
-    reconstruct_session_info(active)
-}
-
 /// Parse a stored RFC 3339 timestamp; falls back to now() on parse failure.
 pub(crate) fn parse_started_at(s: &str) -> jiff::Timestamp {
     s.parse::<jiff::Timestamp>()
@@ -997,21 +1081,39 @@ fn preflight_polytoken_check(config: &Config) -> anyhow::Result<()> {
     }
 }
 
-/// Update stall tracking for an active implementer based on most recent assistant text.
+/// Update stall tracking for an active implementer based on both token usage
+/// and most recent assistant text. If either signal changes, the implementer
+/// is making progress and stall_cycles resets.
 /// Pure function — mutates only the passed-in implementer.
-fn update_stall_tracking(active: &mut ActiveImplementer, current_text: Option<&str>) {
-    match (current_text, active.last_assistant_text.as_deref()) {
-        (Some(current), Some(prev)) if current == prev => {
-            active.stall_cycles += 1;
+fn update_stall_tracking(
+    active: &mut ActiveImplementer,
+    current_tokens: Option<u32>,
+    current_text: Option<&str>,
+) {
+    let tokens_changed = match (current_tokens, active.last_used_tokens) {
+        (Some(cur), Some(prev)) => cur != prev,
+        (Some(_), None) => true,
+        (None, _) => false, // can't compare, don't count as change
+    };
+    let text_changed = match (current_text, active.last_assistant_text.as_deref()) {
+        (Some(cur), Some(prev)) => cur != prev,
+        (Some(_), None) => true,
+        (None, _) => false,
+    };
+
+    if tokens_changed || text_changed {
+        if let Some(t) = current_tokens {
+            active.last_used_tokens = Some(t);
         }
-        (Some(current), _) => {
-            active.last_assistant_text = Some(current.to_string());
-            active.stall_cycles = 0;
+        if let Some(t) = current_text {
+            active.last_assistant_text = Some(t.to_string());
         }
-        (None, _) => {
-            // No assistant text available — can't track, leave stall_cycles unchanged
-        }
+        active.stall_cycles = 0;
+    } else if current_tokens.is_some() || current_text.is_some() {
+        // Both present and unchanged → stalled
+        active.stall_cycles += 1;
     }
+    // If both are None, we have no signal — leave stall_cycles unchanged
 }
 
 /// Pure predicate: should a stall warning be emitted?
@@ -1052,6 +1154,14 @@ fn log_implementer_progress(state: &SupervisorState) {
 fn log_stall_warnings(state: &SupervisorState) {
     let threshold = state.config.supervisor.stall_threshold_cycles;
     for imp in &state.implementers {
+        if matches!(imp.status, ImplementerStatus::Stalled) {
+            tracing::warn!(
+                "implementer #{} ({}) is stalled: daemon alive but no turn in flight and no result file",
+                imp.issue_number,
+                imp.workspace_name
+            );
+            continue;
+        }
         if !matches!(imp.status, ImplementerStatus::Running) {
             continue;
         }
@@ -1237,28 +1347,6 @@ mod tests {
         log_cycle_summary(&state, &actions);
     }
 
-    #[test]
-    fn test_reconstruct_session_info() {
-        let active = ActiveImplementer {
-            issue_number: 42,
-            session_id: "sess-abc".to_string(),
-            workspace_name: "grindbot-42".to_string(),
-            workspace_path: "/tmp/ws".to_string(),
-            base_commit: "abc123".to_string(),
-            started_at: "2024-01-01T00:00:00Z".to_string(),
-            port: 8080,
-            bearer_token: "secret".to_string(),
-            credential_file: "/tmp/cred.json".to_string(),
-            last_assistant_text: None,
-            stall_cycles: 0,
-        };
-        let info = reconstruct_session_info(&active);
-        assert_eq!(info.session_id, "sess-abc");
-        assert_eq!(info.port, 8080);
-        assert_eq!(info.bearer_token, "secret");
-        assert_eq!(info.credential_file, "/tmp/cred.json");
-    }
-
     fn test_active_implementer() -> ActiveImplementer {
         ActiveImplementer {
             issue_number: 1,
@@ -1267,9 +1355,7 @@ mod tests {
             workspace_path: "/tmp/ws".to_string(),
             base_commit: "abc".to_string(),
             started_at: "2024-01-01T00:00:00Z".to_string(),
-            port: 0,
-            bearer_token: String::new(),
-            credential_file: String::new(),
+            last_used_tokens: None,
             last_assistant_text: None,
             stall_cycles: 0,
         }
@@ -1277,48 +1363,73 @@ mod tests {
 
     #[test]
     fn test_update_stall_tracking_grow() {
-        // Text changes → stall_cycles resets to 0, last_assistant_text updates
+        // Either signal changing → stall_cycles resets to 0
         let mut imp = test_active_implementer();
-        update_stall_tracking(&mut imp, Some("working on step 1"));
-        assert_eq!(imp.last_assistant_text, Some("working on step 1".to_string()));
+        update_stall_tracking(&mut imp, Some(100), Some("step 1"));
+        assert_eq!(imp.last_used_tokens, Some(100));
+        assert_eq!(imp.last_assistant_text, Some("step 1".to_string()));
         assert_eq!(imp.stall_cycles, 0);
 
-        update_stall_tracking(&mut imp, Some("working on step 2"));
-        assert_eq!(imp.last_assistant_text, Some("working on step 2".to_string()));
+        // Text changes, tokens stay the same → still progress
+        update_stall_tracking(&mut imp, Some(100), Some("step 2"));
+        assert_eq!(imp.last_assistant_text, Some("step 2".to_string()));
+        assert_eq!(imp.stall_cycles, 0);
+
+        // Tokens change, text stays the same → still progress
+        update_stall_tracking(&mut imp, Some(200), Some("step 2"));
+        assert_eq!(imp.last_used_tokens, Some(200));
         assert_eq!(imp.stall_cycles, 0);
     }
 
     #[test]
     fn test_update_stall_tracking_unchanged() {
-        // Text unchanged → stall_cycles increments
+        // Both signals unchanged → stall_cycles increments
         let mut imp = test_active_implementer();
-        update_stall_tracking(&mut imp, Some("same message"));
+        update_stall_tracking(&mut imp, Some(100), Some("same"));
         assert_eq!(imp.stall_cycles, 0);
 
-        update_stall_tracking(&mut imp, Some("same message"));
+        update_stall_tracking(&mut imp, Some(100), Some("same"));
         assert_eq!(imp.stall_cycles, 1);
 
-        update_stall_tracking(&mut imp, Some("same message"));
+        update_stall_tracking(&mut imp, Some(100), Some("same"));
         assert_eq!(imp.stall_cycles, 2);
     }
 
     #[test]
     fn test_update_stall_tracking_first_observation() {
-        // First observation → stall_cycles = 0, last_assistant_text set
+        // First observation → stall_cycles = 0, both fields set
         let mut imp = test_active_implementer();
-        update_stall_tracking(&mut imp, Some("first message"));
-        assert_eq!(imp.last_assistant_text, Some("first message".to_string()));
+        update_stall_tracking(&mut imp, Some(500), Some("first"));
+        assert_eq!(imp.last_used_tokens, Some(500));
+        assert_eq!(imp.last_assistant_text, Some("first".to_string()));
         assert_eq!(imp.stall_cycles, 0);
     }
 
     #[test]
-    fn test_update_stall_tracking_none_text() {
-        // None text → no change to tracking
+    fn test_update_stall_tracking_text_only() {
+        // Tokens unavailable (None), text changes → progress detected
         let mut imp = test_active_implementer();
+        update_stall_tracking(&mut imp, None, Some("msg 1"));
+        assert_eq!(imp.last_assistant_text, Some("msg 1".to_string()));
+        assert_eq!(imp.stall_cycles, 0);
+
+        update_stall_tracking(&mut imp, None, Some("msg 1"));
+        assert_eq!(imp.stall_cycles, 1);
+
+        update_stall_tracking(&mut imp, None, Some("msg 2"));
+        assert_eq!(imp.stall_cycles, 0);
+    }
+
+    #[test]
+    fn test_update_stall_tracking_none() {
+        // Both signals None → no change to tracking
+        let mut imp = test_active_implementer();
+        imp.last_used_tokens = Some(100);
         imp.last_assistant_text = Some("existing".to_string());
         imp.stall_cycles = 3;
 
-        update_stall_tracking(&mut imp, None);
+        update_stall_tracking(&mut imp, None, None);
+        assert_eq!(imp.last_used_tokens, Some(100));
         assert_eq!(imp.last_assistant_text, Some("existing".to_string()));
         assert_eq!(imp.stall_cycles, 3);
     }
@@ -1330,12 +1441,12 @@ mod tests {
         let threshold = 5;
 
         // First observation sets baseline
-        update_stall_tracking(&mut imp, Some("stuck message"));
+        update_stall_tracking(&mut imp, Some(100), Some("stuck"));
         assert!(!is_stalled(imp.stall_cycles, threshold));
 
         // 5 unchanged cycles → stalled
         for _ in 0..5 {
-            update_stall_tracking(&mut imp, Some("stuck message"));
+            update_stall_tracking(&mut imp, Some(100), Some("stuck"));
         }
         assert_eq!(imp.stall_cycles, 5);
         assert!(is_stalled(imp.stall_cycles, threshold));

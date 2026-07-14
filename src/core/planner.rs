@@ -95,6 +95,18 @@ pub fn plan(state: &SupervisorState) -> Vec<Action> {
         }
     }
 
+    // 2b. Clean up stalled implementers (daemon alive but no turn in flight
+    // and no result file — agent stopped without handing off).
+    for imp in &state.implementers {
+        if matches!(imp.status, ImplementerStatus::Stalled) {
+            handled_issues.insert(imp.issue_number);
+            actions.push(Action::CleanupWorkspace {
+                workspace_name: imp.workspace_name.clone(),
+                reason: CleanupReason::SessionStalled,
+            });
+        }
+    }
+
     // 3. Clean up orphaned workspaces (grindbot- prefix, no active session, no result file)
     for ws in &state.workspaces {
         if ws.name.starts_with(&state.config.workspace.prefix)
