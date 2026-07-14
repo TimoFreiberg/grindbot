@@ -121,6 +121,20 @@ When a rebase produces conflicts, the supervisor spawns a one-shot conflict reso
 
 Releases are tag-triggered. Pushing a `v*` tag builds binaries for macOS (arm64 + x86_64) and Linux (x86_64) and publishes a GitHub Release automatically.
 
+**Using the release script** (preferred):
+
+```sh
+# Release the current Cargo.toml version
+scripts/release.sh
+
+# Or specify a new version (bumps Cargo.toml automatically)
+scripts/release.sh 0.2.0
+```
+
+The script checks for a clean working copy, bumps the version if needed, commits, creates the tag, and pushes it.
+
+**Manual steps:**
+
 1. Bump `version` in `Cargo.toml`.
 2. Commit the change.
 3. Create and push a tag (e.g. `v0.1.0`).
