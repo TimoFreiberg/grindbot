@@ -108,8 +108,10 @@ impl JjClient for RealJjClient {
         Ok(workspaces)
     }
 
-    async fn rebase(&self, revset: &str, dest: &str) -> anyhow::Result<RebaseResult> {
-        let output = self.run_jj(&["rebase", "-r", revset, "-d", dest]).await?;
+    async fn rebase(&self, source: &str, dest: &str) -> anyhow::Result<RebaseResult> {
+        let output = self
+            .run_jj(&["rebase", "--source", source, "--onto", dest])
+            .await?;
 
         if !output.status.success() {
             // Check if it's a conflict
@@ -122,8 +124,8 @@ impl JjClient for RealJjClient {
                 });
             }
             anyhow::bail!(
-                "jj rebase failed for revset '{}' onto '{}': {}",
-                revset,
+                "jj rebase failed for source '{}' onto '{}': {}",
+                source,
                 dest,
                 stderr
             );

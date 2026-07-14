@@ -82,7 +82,7 @@ Eligible issues are sorted FIFO (oldest first) by creation date.
 
 **Handoff:** `grindbot handoff done` validates CLI-supplied review evidence, commit existence, and the commit-ahead-of-base fact, then writes `result.json` and resets the stop counter. `grindbot handoff needs-feedback --message <text>` (or `--message-file <path>`) writes the intentional early-exit result directly. The handoff binary walks up to the nearest `.jj` directory — the workspace root, not the main repo.
 
-**Completion:** a `done` result triggers rebase onto `main@origin` → set bookmark → push → comment → record completed → reset conflict retries → cleanup workspace. A `needs-feedback` result posts the message, records it, and cleans up. Dead/crashed/malformed sessions are cleaned up via `CleanupWorkspace`.
+**Completion:** a `done` result triggers `jj rebase --source <new-commit> --onto main@origin` → set bookmark → push → comment → record completed → reset conflict retries → cleanup workspace. A `needs-feedback` result posts the message, records it, and cleans up. Dead/crashed/malformed sessions are cleaned up via `CleanupWorkspace`.
 
 ## Conflict handling
 

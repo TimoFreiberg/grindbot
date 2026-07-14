@@ -130,6 +130,7 @@ impl GithubClient for MockGithubClient {
 pub struct MockJjClient {
     pub rebase_result: Arc<Mutex<Option<RebaseResult>>>,
     pub rebase_calls: Arc<Mutex<Vec<(String, String)>>>,
+    pub log_results: Arc<Mutex<Vec<CommitInfo>>>,
     pub bookmark_calls: Arc<Mutex<Vec<(String, String)>>>,
     pub push_calls: Arc<Mutex<Vec<(String, String)>>>,
     pub workspaces: Arc<Mutex<Vec<String>>>,
@@ -143,6 +144,7 @@ impl MockJjClient {
         Self {
             rebase_result: Arc::new(Mutex::new(None)),
             rebase_calls: Arc::new(Mutex::new(vec![])),
+            log_results: Arc::new(Mutex::new(vec![])),
             bookmark_calls: Arc::new(Mutex::new(vec![])),
             push_calls: Arc::new(Mutex::new(vec![])),
             workspaces: Arc::new(Mutex::new(vec![])),
@@ -154,6 +156,10 @@ impl MockJjClient {
 
     pub fn set_rebase_result(&self, result: RebaseResult) {
         *self.rebase_result.lock().unwrap() = Some(result);
+    }
+
+    pub fn set_log_results(&self, results: Vec<CommitInfo>) {
+        *self.log_results.lock().unwrap() = results;
     }
 
     pub fn set_has_conflicts(&self, has: bool) {
@@ -213,7 +219,7 @@ impl JjClient for MockJjClient {
     }
 
     async fn log(&self, _revset: &str) -> anyhow::Result<Vec<CommitInfo>> {
-        Ok(vec![])
+        Ok(self.log_results.lock().unwrap().clone())
     }
 
     async fn current_main(&self) -> anyhow::Result<String> {

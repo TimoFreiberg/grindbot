@@ -54,7 +54,7 @@ pub trait JjClient: Send + Sync {
     async fn create_workspace(&self, dest: &str, name: &str, base_rev: &str) -> anyhow::Result<()>;
     async fn forget_workspace(&self, name: &str) -> anyhow::Result<()>;
     async fn list_workspaces(&self) -> anyhow::Result<Vec<String>>;
-    async fn rebase(&self, revset: &str, dest: &str) -> anyhow::Result<RebaseResult>;
+    async fn rebase(&self, source: &str, dest: &str) -> anyhow::Result<RebaseResult>;
     async fn set_bookmark(&self, name: &str, rev: &str) -> anyhow::Result<()>;
     async fn log(&self, revset: &str) -> anyhow::Result<Vec<CommitInfo>>;
     async fn current_main(&self) -> anyhow::Result<String>;

@@ -91,6 +91,11 @@ async fn test_merge_flow_success() {
     let fs = MockFilesystem::new();
     let polytoken = MockPolytokenClient::new();
     jj.set_rebase_result(RebaseResult::Success);
+    jj.set_log_results(vec![grindbot::io::CommitInfo {
+        change_id: "first-change".into(),
+        commit_hash: "firstcommit789".into(),
+        description: "First agent commit".into(),
+    }]);
     let github = std::sync::Arc::new(github);
     let jj = std::sync::Arc::new(jj);
     let io = grindbot::io::IoLayer {
@@ -125,7 +130,7 @@ async fn test_merge_flow_success() {
     .unwrap();
     assert_eq!(
         jj.rebase_calls.lock().unwrap()[0],
-        ("basecommit456::newcommit123".into(), "main@origin".into())
+        ("firstcommit789".into(), "main@origin".into())
     );
     assert_eq!(jj.bookmark_calls.lock().unwrap()[0].1, "newcommit123");
     assert_eq!(jj.push_calls.lock().unwrap().len(), 1);

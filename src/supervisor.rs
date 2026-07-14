@@ -695,6 +695,21 @@ pub async fn start_implementer(
     Ok(())
 }
 
+async fn earliest_agent_commit(
+    io: &IoLayer,
+    base_commit: &str,
+    tip_commit: &str,
+) -> anyhow::Result<String> {
+    let commits = io
+        .jj
+        .log(&format!("roots({}..{})", base_commit, tip_commit))
+        .await?;
+    commits
+        .first()
+        .map(|commit| commit.commit_hash.clone())
+        .ok_or_else(|| anyhow::anyhow!("no commits found after base commit {}", base_commit))
+}
+
 /// Merge an implementation: rebase, move bookmark, push, post comment.
 pub async fn merge_implementation(
     config: &Config,
@@ -721,11 +736,11 @@ pub async fn merge_implementation(
         "grindbot",
     )?;
 
-    // Refresh and rebase implementer's commits onto current main.
+    // Refresh and rebase the implementer's whole commit series onto current main.
     let _ = io.jj.fetch().await;
-    let revset = format!("{}::{}", base_commit, commit);
+    let source = earliest_agent_commit(io, base_commit, commit).await?;
     let dest = format!("{}@origin", config.supervisor.base_branch);
-    let rebase_result = io.jj.rebase(&revset, &dest).await?;
+    let rebase_result = io.jj.rebase(&source, &dest).await?;
 
     match rebase_result {
         RebaseResult::Success => {
@@ -918,10 +933,10 @@ pub async fn resolve_conflict(
     // Conflicts resolved — terminate the agent and proceed with merge
     let _ = io.polytoken.terminate(&session_info).await;
 
-    // Retry the merge
-    let revset = format!("{}::{}", base_commit, commit);
+    // Retry the merge by rebasing the implementer's whole commit series.
+    let source = earliest_agent_commit(io, base_commit, commit).await?;
     let dest = format!("{}@origin", config.supervisor.base_branch);
-    let rebase_result = io.jj.rebase(&revset, &dest).await?;
+    let rebase_result = io.jj.rebase(&source, &dest).await?;
 
     match rebase_result {
         RebaseResult::Success => {
