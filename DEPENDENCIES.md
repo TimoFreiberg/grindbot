@@ -32,7 +32,18 @@ Each implementer workspace contains:
 - `.polytoken/permissions.yaml` — command deny rules.
 
 The workspaces directory (default `.grindbot-workspaces/`) is appended to the
-main repo's `.gitignore`.
+main repo's `.gitignore`. Each JJ workspace is a separate working-tree root,
+so its generated runtime paths should also be ignored in that workspace's own
+`.gitignore`:
+
+```gitignore
+.grindbot/
+.polytoken/
+```
+
+This per-workspace setup is manual. `grindbot doctor` warns about existing
+managed workspaces missing either entry, but Grindbot deliberately does not
+create or edit per-workspace `.gitignore` files or commit those changes.
 
 Supervisor state is stored at
 `$HOME/.local/share/grindbot/{owner}/{repo}/state.json`, or

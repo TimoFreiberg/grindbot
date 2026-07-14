@@ -33,6 +33,75 @@ workspaces_dir = ".grindbot-workspaces"
     config_path
 }
 
+fn make_workspace_fixture() -> (tempfile::TempDir, std::path::PathBuf) {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::create_dir(dir.path().join(".jj")).unwrap();
+    let config_path =
+        make_config_with_polytoken_binary(dir.path(), "nonexistent-polytoken-binary-xyz");
+    let workspace = dir.path().join(".grindbot-workspaces").join("grindbot-1");
+    std::fs::create_dir_all(workspace.join(".jj")).unwrap();
+    (dir, config_path)
+}
+
+fn run_doctor_in_fixture(
+    dir: &std::path::Path,
+    config_path: &std::path::Path,
+) -> std::process::Output {
+    Command::new(env!("CARGO_BIN_EXE_grindbot"))
+        .args(["doctor", "--config", config_path.to_str().unwrap()])
+        .current_dir(dir)
+        .output()
+        .expect("failed to run grindbot doctor")
+}
+
+#[test]
+fn test_doctor_warns_about_workspace_runtime_paths() {
+    let (dir, config_path) = make_workspace_fixture();
+    let output = run_doctor_in_fixture(dir.path(), &config_path);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    assert!(
+        stdout.contains("WARNING workspace ignores missing"),
+        "got: {stdout}"
+    );
+    assert!(stdout.contains(".grindbot/"), "got: {stdout}");
+    assert!(stdout.contains(".polytoken/"), "got: {stdout}");
+}
+
+#[test]
+fn test_doctor_accepts_workspace_runtime_ignore_rules() {
+    let (dir, config_path) = make_workspace_fixture();
+    let workspace = dir.path().join(".grindbot-workspaces/grindbot-1");
+    std::fs::write(workspace.join(".gitignore"), "/.grindbot/\n.polytoken\n").unwrap();
+
+    let output = run_doctor_in_fixture(dir.path(), &config_path);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        !stdout.contains("WARNING workspace ignores missing"),
+        "got: {stdout}"
+    );
+    assert!(
+        stdout.contains("workspace ignores covered"),
+        "got: {stdout}"
+    );
+}
+
+#[test]
+fn test_doctor_ignore_warning_is_non_fatal() {
+    let (dir, config_path) = make_workspace_fixture();
+    let output = run_doctor_in_fixture(dir.path(), &config_path);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    assert!(
+        stdout.contains("WARNING workspace ignores missing"),
+        "got: {stdout}"
+    );
+    assert!(
+        !output.status.success(),
+        "fixture dependency checks should still fail independently"
+    );
+}
+
 #[test]
 fn test_doctor_reports_missing_binary() {
     let dir = tempfile::tempdir().unwrap();
@@ -86,6 +155,11 @@ fn test_doctor_no_config_still_runs() {
     assert!(
         stdout.contains("jj"),
         "doctor should check jj; got: {}",
+        stdout
+    );
+    assert!(
+        stdout.contains("no managed workspace directory found"),
+        "doctor should report the workspace-ignore check is ready for a future workspace; got: {}",
         stdout
     );
 }

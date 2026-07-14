@@ -75,6 +75,15 @@ Issues are listed/fetched via `gh`; eligible only when the author is allowlisted
 | `prefix` | string | `"grindbot"` | Managed jj workspace name prefix. |
 | `workspaces_dir` | string | `".grindbot-workspaces"` | Directory for managed workspaces. Added to `.gitignore` if absent. |
 
+The configured workspace directory is ignored in the main repository, but each JJ workspace is a separate working-tree root with its own `.gitignore`. Add the generated runtime paths to every managed workspace's `.gitignore` manually:
+
+```gitignore
+.grindbot/
+.polytoken/
+```
+
+`grindbot doctor` warns when it finds an existing managed workspace without both entries. This is advisory only. Grindbot does not create or edit per-workspace `.gitignore` files and does not commit ignore-rule changes.
+
 ## Environment
 
 - `RUST_LOG` — tracing filter; defaults to `info` when unset. Can be overridden by `--quiet`/`--verbose` CLI flags.

@@ -1,4 +1,12 @@
 use crate::config::Config;
+use std::path::{Path, PathBuf};
+
+#[derive(Debug, PartialEq, Eq)]
+enum WorkspaceIgnoreDiagnostic {
+    Skipped,
+    Clean,
+    Warning { workspaces: Vec<PathBuf> },
+}
 
 /// Entry point for the CLI.
 /// If config is provided, checks config validity too.
@@ -55,6 +63,10 @@ pub async fn run(config: Option<&Config>) -> anyhow::Result<()> {
     };
     all_passed &= jj_repo_ok;
 
+    // Workspace runtime paths are advisory: each JJ workspace has its own
+    // working-tree root and therefore needs its own ignore coverage.
+    check_workspace_ignores(&cwd, config);
+
     println!();
     if all_passed {
         println!("All checks passed.");
@@ -63,6 +75,64 @@ pub async fn run(config: Option<&Config>) -> anyhow::Result<()> {
         println!("Some checks failed. See above for details.");
         std::process::exit(1);
     }
+}
+
+fn check_workspace_ignores(cwd: &Path, config: Option<&Config>) -> WorkspaceIgnoreDiagnostic {
+    let workspaces_dir = config
+        .map(|cfg| cfg.workspace.workspaces_dir.as_str())
+        .unwrap_or(".grindbot-workspaces");
+    let workspaces_root = cwd.join(workspaces_dir);
+
+    let entries = match std::fs::read_dir(&workspaces_root) {
+        Ok(entries) => entries,
+        Err(_) => {
+            println!(
+                "  - workspace ignores (no managed workspace directory found; ready to check when one exists)"
+            );
+            return WorkspaceIgnoreDiagnostic::Skipped;
+        }
+    };
+
+    let mut missing = Vec::new();
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_dir() || !path.join(".jj").exists() {
+            continue;
+        }
+
+        let gitignore = std::fs::read_to_string(path.join(".gitignore")).unwrap_or_default();
+        if !has_runtime_ignore(&gitignore, ".grindbot")
+            || !has_runtime_ignore(&gitignore, ".polytoken")
+        {
+            missing.push(path);
+        }
+    }
+
+    if missing.is_empty() {
+        println!("  ✓ workspace ignores covered for managed JJ workspaces");
+        WorkspaceIgnoreDiagnostic::Clean
+    } else {
+        println!("  ! WARNING workspace ignores missing");
+        println!(
+            "    Each JJ workspace is a separate working-tree root, so add these entries to each workspace's .gitignore:"
+        );
+        println!("    .grindbot/");
+        println!("    .polytoken/");
+        println!(
+            "    This is a manual setup requirement; this advisory check does not modify or commit repository files."
+        );
+        WorkspaceIgnoreDiagnostic::Warning {
+            workspaces: missing,
+        }
+    }
+}
+
+fn has_runtime_ignore(contents: &str, directory: &str) -> bool {
+    contents.lines().any(|line| {
+        let entry = line.trim();
+        let entry = entry.strip_prefix('/').unwrap_or(entry);
+        entry == directory || entry == format!("{directory}/")
+    })
 }
 
 async fn check_binary(name: &str, args: &[&str]) -> bool {
@@ -88,6 +158,43 @@ async fn check_binary(name: &str, args: &[&str]) -> bool {
             println!("  ✗ {:<11} not found. Install or add to PATH.", name);
             false
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ignore_diagnostic_is_advisory_not_a_fatal_check() {
+        let dir = tempfile::tempdir().unwrap();
+        let workspaces = dir.path().join("workspaces");
+        let workspace = workspaces.join("grindbot-1");
+        std::fs::create_dir_all(workspace.join(".jj")).unwrap();
+
+        let mut config = Config::default();
+        config.workspace.workspaces_dir = "workspaces".to_string();
+
+        let diagnostic = check_workspace_ignores(dir.path(), Some(&config));
+        assert!(matches!(
+            diagnostic,
+            WorkspaceIgnoreDiagnostic::Warning { .. }
+        ));
+        let all_passed = true;
+        assert!(
+            all_passed,
+            "advisory diagnostics must not change fatal status"
+        );
+    }
+
+    #[test]
+    fn accepted_runtime_ignore_forms_are_exact() {
+        for contents in [".grindbot\n.polytoken/\n", "/.grindbot/\n/.polytoken\n"] {
+            assert!(has_runtime_ignore(contents, ".grindbot"));
+            assert!(has_runtime_ignore(contents, ".polytoken"));
+        }
+        assert!(!has_runtime_ignore("*\n", ".grindbot"));
+        assert!(!has_runtime_ignore(".grindbot-cache/\n", ".grindbot"));
     }
 }
 

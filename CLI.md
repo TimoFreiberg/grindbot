@@ -55,6 +55,15 @@ Show current supervisor state. Loads the state file (at the `HOME`-derived path)
 
 Check dependencies and configuration. Verifies that `jj`, `gh`, and the Polytoken binary are on `PATH` and runnable, and (if a config is loaded) that the config validates.
 
+Doctor also performs a non-fatal workspace-ignore check. When the configured workspace directory exists, it inspects its immediate managed JJ workspaces (child directories containing `.jj`). Each JJ workspace is a separate working-tree root, so add these entries manually to each workspace's `.gitignore`:
+
+```gitignore
+.grindbot/
+.polytoken/
+```
+
+The warning is advisory and does not change doctor’s exit status. If no managed workspace directory exists, the check reports that it is ready to check later. Grindbot appends the configured workspace directory to the main repository's `.gitignore`, but deliberately does not create or edit per-workspace `.gitignore` files or commit those changes.
+
 The `--config` option is **optional** and behaves differently from `supervise`/`status`: if omitted, doctor tries `./grindbot.toml` and loads it if present; if absent, it runs binary checks only without config validation.
 
 | Option | Short | Required | Default | Notes |

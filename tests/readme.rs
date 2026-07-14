@@ -69,6 +69,32 @@ fn test_readme_contains_documentation() {
 }
 
 #[test]
+fn test_workspace_ignore_documentation_is_synchronized() {
+    for (name, documentation) in [
+        ("CLI.md", include_str!("../CLI.md")),
+        ("CONFIGURATION.md", include_str!("../CONFIGURATION.md")),
+        ("DEPENDENCIES.md", include_str!("../DEPENDENCIES.md")),
+    ] {
+        assert!(
+            documentation.contains(".grindbot/"),
+            "{name} should recommend .grindbot/"
+        );
+        assert!(
+            documentation.contains(".polytoken/"),
+            "{name} should recommend .polytoken/"
+        );
+        assert!(
+            documentation.contains("per-workspace"),
+            "{name} should describe per-workspace setup"
+        );
+        assert!(
+            documentation.contains("does not") && documentation.contains(".gitignore"),
+            "{name} should describe the scoped mutation policy"
+        );
+    }
+}
+
+#[test]
 fn test_agent_prompt_documentation_includes_source_files() {
     let documentation_path =
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("AGENT_PROMPTS.md");
