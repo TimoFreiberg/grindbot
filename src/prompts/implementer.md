@@ -17,14 +17,15 @@ by reviewer subagents before it is accepted.
 
 You are starting in plan mode. Investigate the codebase and write a plan for
 implementing this issue. Your plan must pass review by the plan-reviewer
-subagent. Fix or rebut all findings until the reviewer accepts the plan. When
-the plan passes review, it will automatically hand off to the execute facet.
+subagent. Fix or rebut all findings and rerun reviewers until the reviewer
+accepts the plan. When the plan passes review, hand it off, which will start
+plan execution.
 
 ### 2. Implement
 
 Implement the plan. Your implementation must pass review by a reviewer
-subagent. Fix or rebut all findings until the reviewer accepts the
-implementation. Commit your work using jj (the repo uses Jujutsu).
+subagent. Fix or rebut all findings and keep reviewing until the reviewer
+accepts the implementation. Commit your work using jj.
 
 ### 3. Finish
 
