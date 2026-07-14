@@ -17,6 +17,7 @@ impl RealJjClient {
         let mut cmd = tokio::process::Command::new("jj");
         cmd.args(["--repository", &self.repo_path]);
         cmd.args(args);
+        tracing::debug!(command = "jj", repository = %self.repo_path, args = ?args, "running external command");
         cmd.output().await.map_err(Into::into)
     }
 }
@@ -30,6 +31,7 @@ impl JjClient for RealJjClient {
     }
 
     async fn init_colocated(&self, repo_path: &str) -> anyhow::Result<()> {
+        tracing::debug!(command = "jj git init", repository = repo_path, "running external command");
         let output = tokio::process::Command::new("jj")
             .args(["git", "init", repo_path])
             .output()
@@ -44,6 +46,7 @@ impl JjClient for RealJjClient {
     }
 
     async fn create_workspace(&self, dest: &str, name: &str, base_rev: &str) -> anyhow::Result<()> {
+        tracing::debug!(command = "jj workspace add", destination = dest, workspace = name, base_rev, "running external command");
         let output = tokio::process::Command::new("jj")
             .args(["workspace", "add", dest, "--name", name, "-r", base_rev])
             .output()

@@ -66,6 +66,7 @@ pub async fn run(config: Option<&Config>) -> anyhow::Result<()> {
 }
 
 async fn check_binary(name: &str, args: &[&str]) -> bool {
+    tracing::debug!(command = name, args = ?args, "running external command");
     match tokio::process::Command::new(name).args(args).output().await {
         Ok(output) if output.status.success() => {
             let version = String::from_utf8_lossy(&output.stdout);
@@ -101,6 +102,7 @@ async fn check_gh() -> bool {
     }
 
     // Check auth status
+    tracing::debug!(command = "gh auth status", "running external command");
     match tokio::process::Command::new("gh")
         .args(["auth", "status"])
         .output()

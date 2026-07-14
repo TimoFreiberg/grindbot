@@ -75,6 +75,7 @@ impl RealPolytokenClient {
 impl PolytokenClient for RealPolytokenClient {
     async fn spawn_session(&self, workspace_dir: &str) -> anyhow::Result<SessionInfo> {
         // Step 1: Run `polytoken --working-dir <workspace> new --no-attach`
+        tracing::debug!(command = %self.binary, workspace = workspace_dir, "running external command");
         let output = tokio::process::Command::new(&self.binary)
             .args(["--working-dir", workspace_dir, "new", "--no-attach"])
             .output()
@@ -301,6 +302,7 @@ impl PolytokenClient for RealPolytokenClient {
 
 impl RealPolytokenClient {
     async fn find_credential_file(&self, session_id: &str) -> anyhow::Result<String> {
+        tracing::debug!(command = %self.binary, session_id, "running external command");
         let output = tokio::process::Command::new(&self.binary)
             .args(["sessions", "--format", "json"])
             .output()

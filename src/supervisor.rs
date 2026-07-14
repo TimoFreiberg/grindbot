@@ -950,6 +950,7 @@ pub(crate) fn parse_started_at(s: &str) -> jiff::Timestamp {
 
 /// Pre-flight check: verify the polytoken binary exists and is callable.
 fn preflight_polytoken_check(config: &Config) -> anyhow::Result<()> {
+    tracing::debug!(command = %config.polytoken.binary, "running external command");
     let output = std::process::Command::new(&config.polytoken.binary)
         .arg("--version")
         .output();

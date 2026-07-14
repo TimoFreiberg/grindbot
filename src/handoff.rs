@@ -61,9 +61,11 @@ pub fn done_manifest(manifest_path: &Path) -> anyhow::Result<()> {
 
 fn validate_commit(workspace_root: &Path, commit: &str) -> anyhow::Result<()> {
     let base_commit = std::fs::read_to_string(workspace_root.join(".grindbot/base_commit"))?.trim().to_string();
+    tracing::debug!(command = "jj log", commit, repository = ?workspace_root, "running external command");
     let output = std::process::Command::new("jj").args(["log", "-r", commit, "--no-graph", "-R", workspace_root.to_str().unwrap()]).output()?;
     if !output.status.success() { anyhow::bail!("commit {} does not exist: {}", commit, String::from_utf8_lossy(&output.stderr)); }
     let revset = format!("{}::{} ~ {}", base_commit, commit, base_commit);
+    tracing::debug!(command = "jj log", revset, repository = ?workspace_root, "running external command");
     let output = std::process::Command::new("jj").args(["log", "-r", &revset, "--no-graph", "-R", workspace_root.to_str().unwrap()]).output()?;
     if !output.status.success() || String::from_utf8_lossy(&output.stdout).trim().is_empty() {
         anyhow::bail!("commit {} is not ahead of base {}", commit, base_commit);
@@ -88,6 +90,7 @@ pub fn done(commit: &str) -> anyhow::Result<()> {
         .to_string();
 
     // Validate commit exists
+    tracing::debug!(command = "jj log", commit, repository = ?workspace_root, "running external command");
     let log_output = std::process::Command::new("jj")
         .args([
             "log",
@@ -110,6 +113,7 @@ pub fn done(commit: &str) -> anyhow::Result<()> {
     // Validate commit is ahead of base (not identical to base)
     // `jj log -r '<base>::<commit> ~ <base>'` should be non-empty
     let revset = format!("{}::{} ~ {}", base_commit, commit, base_commit);
+    tracing::debug!(command = "jj log", revset, repository = ?workspace_root, "running external command");
     let ahead_output = std::process::Command::new("jj")
         .args([
             "log",

@@ -34,6 +34,7 @@ pub struct RealCommandRunner;
 
 impl CommandRunner for RealCommandRunner {
     fn run(&self, command: &str, cwd: &str) -> anyhow::Result<CommandOutput> {
+        tracing::debug!(command = "sh -c", cwd, command, "running external command");
         let output = std::process::Command::new("sh")
             .args(["-c", command])
             .current_dir(cwd)
